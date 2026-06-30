@@ -67,7 +67,9 @@ class ConstantWater(Fluid):
     def __init__(
         self, name="Water", cp=CP_WATER, mu=MU_WATER, rho=RHO_WATER, k=K_WATER
     ):
-        super(ConstantWater, self).__init__(name=name, cp=cp, mu=mu, rho=rho, k=k)
+        super(ConstantWater, self).__init__(
+            name=name, isconstant=True, cp=cp, mu=mu, rho=rho, k=k
+        )
 
 
 class Water(Fluid):
@@ -81,8 +83,8 @@ class Water(Fluid):
             Heat transfer engineering 19.3 (1998): 87-101.
     """
 
-    def __init__(self, name="Water", isconstant=True):
-        super(Water, self).__init__(name)
+    def __init__(self, name="Water"):
+        super(Water, self).__init__(name, isconstant=False)
 
     def get_cp(self, t=50):
         """
