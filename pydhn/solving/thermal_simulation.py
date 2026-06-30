@@ -73,7 +73,8 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
         new_edges = [("eulerian_node", n) for n in degrees[indices, 0]]
         S.add_edges_from(new_edges)
     else:
-        new_node = edges[0]
+        # All nodes already have even degree: start from any node of S
+        new_node = next(iter(S.nodes()))
     for u, v in nx.eulerian_circuit(S, source=new_node):
         if "eulerian_node" in [u, v]:
             continue
