@@ -136,7 +136,7 @@ def compute_nusselt(
     # Constant value for laminar regime
     laminar = laminar_nusselt()
 
-    # If turbilent use Gnielinski correlation
+    # If turbulent use Gnielinski correlation
     turbulent = gnielinski_nusselt(
         reynolds=reynolds,
         diameter=diameter,
@@ -151,7 +151,7 @@ def compute_nusselt(
 
     # Linear interpolation if flow is in transitional regime
     transition = transition_nusselt(
-        reynolds=2300,
+        reynolds=reynolds,
         diameter=diameter,
         length=length,
         prandtl=prandtl,
