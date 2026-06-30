@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-only
 
-numpy>=1.25
+numpy>=1.25.2,<3
 scipy>=1.11
 networkx>=2.6,<3
 matplotlib
