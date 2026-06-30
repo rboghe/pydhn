@@ -51,8 +51,11 @@ def _assign_node_pressure(net, source=None):
         else:
             idx = idx.item()
         u, v = edges[idx]
-    p = np.nan_to_num(net[(u, v)]["static_pressure"], copy=True, nan=1e6)
-    net.set_node_attributes({v: p}, "pressure")
+        p = np.nan_to_num(net[(u, v)]["static_pressure"], copy=True, nan=1e6)
+        net.set_node_attributes({v: p}, "pressure")
+    else:
+        # The source node is expected to already have its pressure set
+        v = source
 
     edges = list(net._graph.edges())  # TODO: speed this up
     for u, v in nx.dfs_edges(G.to_undirected(), source=v):
