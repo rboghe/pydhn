@@ -153,7 +153,7 @@ def compute_dp_pipe(
     denom = 4 * np.pi**2 * rho_fluid * (r) ** 5
     dp = safe_divide(num, denom)
     if compute_hydrostatic:
-        dp += (rho_fluid * 9.81 * dz,)
+        dp += rho_fluid * 9.81 * dz
     if compute_der:
         num_der = length * fd * np.abs(mdot)
         denom_der = 2.0 * np.pi**2 * rho_fluid * (diameter / 2.0) ** 5
