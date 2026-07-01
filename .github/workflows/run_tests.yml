@@ -43,26 +43,41 @@ jobs:
         if: ${{ matrix.python-version != '3.12' }}
         run: poetry run python -m unittest -b
 
-  # Boundary matrix over the dependency ranges. All tests are blocking.
+  # Extremes of the declared dependency ranges. Rather than hand-assembling
+  # corners (which cross-dependencies make infeasible or silently rewrite), each
+  # leg lets uv resolve a guaranteed-consistent set in a chosen direction:
+  #   - lowest-direct: the floor of the ranges (only feasible on old Pythons,
+  #     where the floor versions still have wheels);
+  #   - highest: the ceiling, for each numpy major across the Python range.
+  # Every spec carries a lower bound: with lowest-direct an unbounded dep would
+  # resolve to its absolute oldest release.
   compat:
-    name: deps (${{ matrix.label }})
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: min (py3.9)
+          - label: lowest (py3.9)
             python: '3.9'
-            deps: '"numpy==1.25.2" "scipy==1.11.2" "networkx==2.6" "pandas==2.0.3" "plotly==5.16.1" "matplotlib==3.7.2" "openpyxl==3.1.2"'
+            resolution: lowest-direct
+            deps: '"numpy>=1.25.2,<2" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy1 ceiling (py3.12)
+            python: '3.12'
+            resolution: highest
+            deps: '"numpy>=1.25.2,<2" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
           - label: numpy2 (py3.10)
             python: '3.10'
-            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
           - label: numpy2 (py3.11)
             python: '3.11'
-            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
           - label: numpy2 (py3.12)
             python: '3.12'
-            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
 
     steps:
       - name: Checkout code
@@ -73,11 +88,46 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install dependencies (${{ matrix.label }})
-        run: pip install ${{ matrix.deps }}
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies (${{ matrix.resolution }})
+        run: uv pip install --system --resolution ${{ matrix.resolution }} ${{ matrix.deps }}
 
       - name: Show resolved versions
-        run: pip list
+        run: uv pip list
 
       - name: Run tests
         run: python -m unittest -b
+
+  # Does the *full* declared dependency set (including geopandas, which the test
+  # suite does not import) actually resolve, install and import — on both numpy
+  # majors? This validates the published package, not just the tested subset.
+  install:
+    name: install (full deps, numpy ${{ matrix.numpy-major }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - numpy-major: '1'
+            numpy: '>=1.25.2,<2'
+          - numpy-major: '2'
+            numpy: '>=2,<3'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install the package with its full declared dependencies
+        run: pip install "numpy${{ matrix.numpy }}" .
+
+      # geopandas is imported directly: pydhn only imports it lazily, so
+      # importing the package alone would not exercise the geopandas ABI.
+      - name: Import check (package + geopandas)
+        run: python -c "import pydhn; import geopandas; print('import OK')"
