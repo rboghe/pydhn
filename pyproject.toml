@@ -12,10 +12,10 @@ homepage = "https://www.github.com/idiap/pydhn"
 repository = "https://www.github.com/idiap/pydhn"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.10,<3.14"
 numpy = ">=1.25.2,<3"
 scipy = "^1.11.2"
-networkx = ">=2.6,<3"
+networkx = ">=2.6,<4"
 matplotlib = "^3.7.2"
 pandas = "^2.0.3"
 geopandas= "^0.13.2"

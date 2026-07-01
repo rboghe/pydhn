@@ -4,7 +4,7 @@
 
 numpy>=1.25.2,<3
 scipy>=1.11
-networkx>=2.6,<3
+networkx>=2.6,<4
 matplotlib
 pandas
 geopandas>=0.13.2,<0.14
