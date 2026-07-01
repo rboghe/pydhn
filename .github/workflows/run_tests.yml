@@ -57,6 +57,9 @@ jobs:
           - label: numpy2 (py3.10)
             python: '3.10'
             deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+          - label: numpy2 (py3.11)
+            python: '3.11'
+            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
           - label: numpy2 (py3.12)
             python: '3.12'
             deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
