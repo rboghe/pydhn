@@ -3,11 +3,15 @@ name: Run Tests
 on: [push, pull_request]
 
 jobs:
-  test:
+  # Reproducible run against the committed poetry.lock, across supported Pythons.
+  # This also covers the numpy 1.x side of the range (the lock pins numpy 1.x).
+  locked:
+    name: locked (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.9, '3.10', 3.11, 3.12]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
 
     steps:
       - name: Checkout code
@@ -18,18 +22,59 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies with Poetry
-        run: |
-          pip install poetry
-          poetry install
+      # Pin Poetry to the major that produced poetry.lock so the lock format
+      # matches and `poetry check --lock` stays meaningful across runners.
+      - name: Install Poetry (pinned)
+        run: pip install "poetry>=2.0,<3.0"
 
-      - name: Run Tests with Coverage
-        if: ${{ matrix.python-version == 3.12 }}
+      - name: Check that poetry.lock is consistent with pyproject.toml
+        run: poetry check --lock
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run tests with coverage
+        if: ${{ matrix.python-version == '3.12' }}
         run: |
           poetry run coverage run --source ./pydhn -m unittest -b
           poetry run coverage report -m
 
-      - name: Run Tests
-        if: ${{ matrix.python-version != 3.12 }}
-        run: |
-          poetry run python -m unittest -b
+      - name: Run tests
+        if: ${{ matrix.python-version != '3.12' }}
+        run: poetry run python -m unittest -b
+
+  # Boundary matrix over the dependency ranges. All tests are blocking.
+  compat:
+    name: deps (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: min (py3.9)
+            python: '3.9'
+            deps: '"numpy==1.25.2" "scipy==1.11.2" "networkx==2.6" "pandas==2.0.3" "plotly==5.16.1" "matplotlib==3.7.2" "openpyxl==3.1.2"'
+          - label: numpy2 (py3.10)
+            python: '3.10'
+            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+          - label: numpy2 (py3.12)
+            python: '3.12'
+            deps: '"numpy>=2,<3" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" scipy matplotlib openpyxl'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies (${{ matrix.label }})
+        run: pip install ${{ matrix.deps }}
+
+      - name: Show resolved versions
+        run: pip list
+
+      - name: Run tests
+        run: python -m unittest -b
