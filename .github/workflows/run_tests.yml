@@ -78,6 +78,10 @@ jobs:
             python: '3.12'
             resolution: highest
             deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy2 (py3.13)
+            python: '3.13'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
 
     steps:
       - name: Checkout code
