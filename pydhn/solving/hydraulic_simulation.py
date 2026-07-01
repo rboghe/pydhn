@@ -163,8 +163,8 @@ def solve_hydraulics(
     main_idx = p_mask[0]
     secondary = np.setdiff1d(leaves, main_idx)
     matrix_indices = np.arange(cycle_matrix.shape[0])
-    matrix_indices_p = np.where(np.in1d(secondary, p_mask))[0]
-    matrix_indices_m = np.where(np.in1d(secondary, m_mask))[0]
+    matrix_indices_p = np.where(np.isin(secondary, p_mask))[0]
+    matrix_indices_m = np.where(np.isin(secondary, m_mask))[0]
     matrix_indices_loops = np.setdiff1d(matrix_indices, matrix_indices_p)
     matrix_indices_loops = np.setdiff1d(matrix_indices_loops, matrix_indices_m)
 

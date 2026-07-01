@@ -13,7 +13,7 @@ repository = "https://www.github.com/idiap/pydhn"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
-numpy = "^1.25.2"
+numpy = ">=1.25.2,<3"
 scipy = "^1.11.2"
 networkx = ">=2.6,<3"
 matplotlib = "^3.7.2"
