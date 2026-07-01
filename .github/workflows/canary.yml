@@ -1,0 +1,31 @@
+name: Canary (latest deps)
+
+# Runs on a schedule (not on PRs), so a failure never gates a merge. It is an
+# early-warning signal for upcoming breakage from newer dependency releases
+# (e.g. networkx 3, pandas 3, plotly 6) and is reviewed on its own cadence.
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays, 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  latest:
+    name: latest everything (py3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install latest dependencies
+        run: pip install numpy networkx pandas plotly scipy matplotlib openpyxl
+
+      - name: Show resolved versions
+        run: pip list
+
+      - name: Run tests
+        run: python -m unittest -b
