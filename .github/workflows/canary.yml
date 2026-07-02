@@ -22,6 +22,7 @@ jobs:
 
       # Latest of every dependency, ignoring the package's version caps, to
       # surface the next majors before we declare support.
+      - name: Install latest dependencies
         run: pip install -U numpy scipy networkx pandas matplotlib plotly geopandas openpyxl
 
       # Install the package without touching the (already-latest) deps, so its
