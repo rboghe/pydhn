@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   # Reproducible run against the committed poetry.lock, across supported Pythons.
-  # This also covers the numpy 1.x side of the range (the lock pins numpy 1.x).
   locked:
     name: locked (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -43,14 +42,9 @@ jobs:
         if: ${{ matrix.python-version != '3.12' }}
         run: poetry run python -m unittest -b
 
-  # Extremes of the declared dependency ranges. Rather than hand-assembling
-  # corners (which cross-dependencies make infeasible or silently rewrite), each
-  # leg lets uv resolve a guaranteed-consistent set in a chosen direction:
-  #   - lowest-direct: the floor of the ranges (only feasible on old Pythons,
-  #     where the floor versions still have wheels);
-  #   - highest: the ceiling, for each numpy major across the Python range.
-  # Every spec carries a lower bound: with lowest-direct an unbounded dep would
-  # resolve to its absolute oldest release.
+  # Extremes of the declared dependency ranges:
+  #   - floor (only feasible on old Pythons);
+  #   - ceiling, for each numpy major across the Python range.
   compat:
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
@@ -105,9 +99,7 @@ jobs:
       - name: Run tests
         run: python -m unittest -b
 
-  # Does the *full* declared dependency set (including geopandas, which the test
-  # suite does not import) actually resolve, install and import — on both numpy
-  # majors? This validates the published package, not just the tested subset.
+  # Validates the full dependency set.
   install:
     name: install (full deps, numpy ${{ matrix.numpy-major }})
     runs-on: ubuntu-latest
