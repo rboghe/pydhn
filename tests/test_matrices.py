@@ -15,6 +15,7 @@ import numpy as np
 
 from pydhn import Network
 from pydhn.networks import star_network
+from pydhn.utilities.matrices import compute_cycle_matrix
 
 
 def two_producer_network():
@@ -78,6 +79,30 @@ class CycleMatrixTestCase(unittest.TestCase):
             net = factory()
             B = net.cycle_matrix
             with self.subTest(network=label):
+                self.assertEqual(np.linalg.matrix_rank(B), B.shape[0])
+
+    def test_nx_cycle_basis(self):
+        """compute_cycle_matrix(method='nx') is a valid full cycle basis too."""
+        for label, factory in NETWORKS.items():
+            net = factory()
+            B = compute_cycle_matrix(net, method="nx")
+            with self.subTest(network=label):
+                np.testing.assert_allclose(net.incidence_matrix @ B.T, 0.0, atol=1e-12)
+                self.assertEqual(B.shape[0], net.n_edges - net.n_nodes + 1)
+                self.assertEqual(np.linalg.matrix_rank(B), B.shape[0])
+
+    def test_consumers_cycle_matrix(self):
+        """
+        consumers_cycle_matrix holds one independent circulation per consumer
+        and per secondary producer (producer-to-consumer loops).
+        """
+        for label, factory in NETWORKS.items():
+            net = factory()
+            B = net.consumers_cycle_matrix
+            expected = len(net.consumers_mask) + len(net.producers_mask) - 1
+            with self.subTest(network=label):
+                np.testing.assert_allclose(net.incidence_matrix @ B.T, 0.0, atol=1e-12)
+                self.assertEqual(B.shape[0], expected)
                 self.assertEqual(np.linalg.matrix_rank(B), B.shape[0])
 
 
