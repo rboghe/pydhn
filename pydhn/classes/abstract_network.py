@@ -44,6 +44,48 @@ from pydhn.utilities.matrices import compute_incidence_matrix
 T = TypeVar("T", bound="AbstractNetwork")
 
 
+class VersionedDiGraph(nx.DiGraph):
+    """
+    DiGraph that counts mutations in self._version, so that caches built from
+    the graph can detect staleness in O(1) even when the graph is modified
+    directly through the networkx API (including nx.relabel_nodes, which
+    internally uses add_edges_from and remove_node).
+    """
+
+    def __init__(self, *args, **kwargs):
+        self._version = 0
+        super().__init__(*args, **kwargs)
+
+
+def _versioned(name):
+    base = getattr(nx.DiGraph, name)
+
+    def method(self, *args, **kwargs):
+        self._version += 1
+        return base(self, *args, **kwargs)
+
+    method.__name__ = name
+    method.__doc__ = base.__doc__
+    return method
+
+
+# add_edges_from cannot be covered by overriding add_edge only: networkx
+# inlines the insertion logic instead of delegating
+for _name in (
+    "add_node",
+    "add_nodes_from",
+    "remove_node",
+    "remove_nodes_from",
+    "add_edge",
+    "add_edges_from",
+    "remove_edge",
+    "remove_edges_from",
+    "clear",
+    "clear_edges",
+):
+    setattr(VersionedDiGraph, _name, _versioned(_name))
+
+
 class AbstractNetwork:
     """
     Abstract class for DHNs. It incorporates common methods and utilities to
@@ -52,15 +94,14 @@ class AbstractNetwork:
 
     def __init__(self, caching: bool = True):
         # Network Graph
-        self._graph = nx.DiGraph()
+        self._graph = VersionedDiGraph()
 
         # Caches
         self._caching = caching
         self._node_cache = defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
-        self._edge_cache = None
-        self._component_cache = None
         self._mask_cache = dict()  # TODO: implement
         self._matrix_cache = dict()
+        self._reset_caches()
 
     def __len__(self) -> int:
         """
@@ -158,10 +199,8 @@ class AbstractNetwork:
         """
         self._caching = iscaching
         self._node_cache = defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
-        self._edge_cache = None
-        self._component_cache = None
         self._mask_cache = dict()
-        self._matrix_cache = dict()
+        self._reset_caches()
 
     @property
     def n_nodes(self) -> int:
@@ -236,12 +275,16 @@ class AbstractNetwork:
             The desired matrix, commonly as Numpy array.
 
         """
+        self._validate_caches()
         if self.caching:
             try:
                 return self._matrix_cache[matrix_name]
             except KeyError:
                 pass
         matrix = matrix_function(net=self, **kwargs)
+        # Read-only, so that mutating the returned array raises instead of
+        # silently corrupting the cache
+        matrix.setflags(write=False)
         self._matrix_cache[matrix_name] = matrix
         return matrix
 
@@ -400,12 +443,9 @@ class AbstractNetwork:
         if name in self._graph.nodes:
             warn("Node already in graph, information will be updated!")
 
-        # Add the node to the graph
+        # Add the node to the graph. Cache invalidation is handled lazily
+        # through the graph version stamp.
         self._graph.add_node(name, pos=(x, y), z=z, temperature=temperature, **kwargs)
-
-        # Clear cache
-        # self._node_cache.clear()
-        self._matrix_cache.clear()
 
     def add_edge(
         self, name: Hashable, start_node: Hashable, end_node: Hashable, **kwargs
@@ -450,11 +490,9 @@ class AbstractNetwork:
             )
             start_node, end_node = end_node, start_node
 
-        # Add entry to networkx
+        # Add entry to networkx. Cache invalidation is handled lazily through
+        # the graph version stamp.
         self._graph.add_edge(start_node, end_node, name=name, **kwargs)
-
-        # Clear cache
-        self._reset_caches()
 
     def set_node_attribute(self, value: Any, name: str) -> None:
         """
@@ -657,6 +695,17 @@ class AbstractNetwork:
             for i, v in zip(mask, values):
                 comps[i].set(name, v)
 
+    def set_component(
+        self, start_node: Hashable, end_node: Hashable, component: Any
+    ) -> None:
+        """
+        Replaces the component of the edge (start_node, end_node). Assigning
+        directly to self._graph[u][v]["component"] is not supported, as it
+        would leave stale entries in the component cache.
+        """
+        self._graph[start_node][end_node]["component"] = component
+        self._component_cache = None
+
     # Getters #################################################################
     # Methods to get nodes and edges as well as their attributes.
     ###########################################################################
@@ -709,6 +758,7 @@ class AbstractNetwork:
         return arr
 
     def _get_cached_edges(self):
+        self._validate_caches()
         if self.caching:
             if self._edge_cache is None:
                 self._edge_cache = np.array(self._graph.edges())
@@ -723,6 +773,7 @@ class AbstractNetwork:
         Components are mutable, so the cached list stays valid until edges are
         added or removed. Callers must not modify the returned list.
         """
+        self._validate_caches()
         if not self.caching:
             return [d for _, _, d in self._graph.edges(data="component")]
         if self._component_cache is None:
@@ -1029,10 +1080,19 @@ class AbstractNetwork:
         self._edge_cache = None
         self._component_cache = None
         self._matrix_cache.clear()
+        self._cache_version = getattr(self._graph, "_version", None)
+
+    def _validate_caches(self):
+        """
+        Drops all caches if the graph was mutated since they were built, even
+        through direct manipulation of self._graph.
+        """
+        if getattr(self._graph, "_version", None) != self._cache_version:
+            self._reset_caches()
 
     def load_graph(self, filename):
         # TODO: OWN FORMAT
-        self._graph = nx.read_gpickle(f"{filename}.gpickle")
+        self._graph = VersionedDiGraph(nx.read_gpickle(f"{filename}.gpickle"))
         self._reset_caches()
 
     def save_gml(self, filename):
@@ -1071,7 +1131,7 @@ class AbstractNetwork:
                 component = json.loads(component_str.replace("'", '"'))
                 graph[u][v]["component"] = serialize_component(component)
 
-        self._graph = graph
+        self._graph = VersionedDiGraph(graph)
         self._reset_caches()
 
     def to_geojson(self, filename, target="all"):

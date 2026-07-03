@@ -11,9 +11,11 @@
 
 import unittest
 
+import networkx as nx
 import numpy as np
 
 from pydhn import Network
+from pydhn.components import Pipe
 
 
 def star_network():
@@ -307,6 +309,35 @@ class AbstractNetworkTestCase(unittest.TestCase):
         # Single-element data list behaves like a string (returns a flat array)
         _, arr = net.edges(data=["test_attribute"], mask=mask)
         np.testing.assert_array_equal(arr, [11.0, 22.0])
+
+    def test_cache_robustness(self):
+        """
+        Caches must stay coherent when self._graph is mutated directly via
+        the networkx API, and cached matrices must be read-only.
+        """
+        net = star_network()
+        net.edges()  # warm caches
+        inc = net.incidence_matrix
+        n_edges = net.n_edges
+
+        # Cached matrices are read-only
+        with self.assertRaises(ValueError):
+            inc[0, 0] = 999.0
+
+        # Direct edge addition through the graph API
+        net._graph.add_edge("S6", "S9", name="direct", component=Pipe(name="direct"))
+        self.assertEqual(len(net.edges()), n_edges + 1)
+        self.assertIn("direct", net.get_edges_attribute_array("name"))
+        self.assertEqual(net.incidence_matrix.shape[1], n_edges + 1)
+
+        # In-place node relabeling
+        nx.relabel_nodes(net._graph, {"S1": "S1_new"}, copy=False)
+        self.assertIn("S1_new", net.edges())
+
+        # Component replacement through set_component
+        u, v = net.edges()[0]
+        net.set_component(u, v, Pipe(name="replacement"))
+        self.assertIn("replacement", net.get_edges_attribute_array("name"))
 
     def test_valve_and_pump_masks(self):
         """
