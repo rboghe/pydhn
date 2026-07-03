@@ -267,17 +267,15 @@ class Network(AbstractNetwork):
 
     @property
     def valves_mask(self) -> np.array:
-        """Returns an array with the indices of all the consumers."""
-        # TODO: valves for now are just consumers
+        """Returns an array with the indices of all the branch valves."""
         types = self.get_edges_attribute_array("component_type")
-        return np.where(types == "consumer")[0]
+        return np.where(types == "base_branch_valve")[0]
 
     @property
     def pumps_mask(self) -> np.array:
-        """Returns an array with the indices of all the producers."""
-        # TODO: pumps for now are just producers
+        """Returns an array with the indices of all the branch pumps."""
         types = self.get_edges_attribute_array("component_type")
-        return np.where(types == "producer")[0]
+        return np.where(types == "branch_pump")[0]
 
     @property
     def supply_line_mask(self) -> np.array:
@@ -305,7 +303,8 @@ class Network(AbstractNetwork):
         Returns an array with the indices of all the valves with imposed kv.
         """
         kv_imposed = self.get_edges_attribute_array("kv_imposed")
-        return np.where(kv_imposed is not None)[0]
+        # Unset attributes are returned as None or NaN (v != v)
+        return np.where([v is not None and v == v for v in kv_imposed])[0]
 
     @property
     def imposed_pumps_mask(self) -> np.array:
@@ -313,7 +312,8 @@ class Network(AbstractNetwork):
         Returns an array with the indices of all the pumps with imposed rpm.
         """
         rpm_imposed = self.get_edges_attribute_array("rpm_imposed")
-        return np.where(rpm_imposed is not None)[0]
+        # Unset attributes are returned as None or NaN (v != v)
+        return np.where([v is not None and v == v for v in rpm_imposed])[0]
 
     @property
     def main_edge_mask(self) -> np.array:
