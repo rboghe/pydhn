@@ -497,9 +497,12 @@ class LagrangianPipe(Pipe):
                 leaving_volumes * leaving_temperatures
             ).sum() / leaving_volumes.sum()
 
-            # Update wall discretization to match that of volumes
+            # Update wall discretization to match that of volumes. The old
+            # grid must be in the same reference frame as the wall
+            # temperatures, so it is flipped for reversed flows.
             cumsum = np.cumsum(staying_volumes)
-            last_cumsum = np.cumsum(self._last_volumes)
+            last_volumes = self._last_volumes[::-1] if REVERSED else self._last_volumes
+            last_cumsum = np.cumsum(last_volumes)
             old_wall_temps = new_wall_temps.copy()
             new_wall_temps = np.interp(cumsum, last_cumsum, old_wall_temps)
         else:
