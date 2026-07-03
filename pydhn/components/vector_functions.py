@@ -17,7 +17,7 @@ from pydhn.components.base_components_hydraulics import compute_dp_valve_net
 from pydhn.components.base_components_thermal import compute_cons_temp_net
 from pydhn.components.base_components_thermal import compute_pipe_temp_net
 from pydhn.components.base_components_thermal import compute_prod_temp_net
-from pydhn.components.lagrangian_thermal import compute_lagrangian_temp_net
+from pydhn.components.lagrangian_pipe_thermal import compute_lagrangian_temp_net
 
 COMPONENT_FUNCTIONS_DICT = defaultdict(lambda: None)
 

@@ -9,7 +9,7 @@
 
 """
 Equivalence tests between the vectorized lagrangian thermal model
-(pydhn.components.lagrangian_thermal) and the pipe-by-pipe reference
+(pydhn.components.lagrangian_pipe_thermal) and the pipe-by-pipe reference
 implementation (LagrangianPipe._compute_temperatures).
 
 Both paths are driven through compute_edge_temperatures() on identical

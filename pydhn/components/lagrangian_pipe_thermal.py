@@ -17,11 +17,6 @@ per-pipe parcel state is packed into flat (CSR-like) arrays for the physics
 and into zero-padded 2D arrays for the parcel displacement, so that per-pipe
 cumulative sums and threshold checks are bitwise identical to the scalar
 model. The pipe objects remain the owners of the state.
-
-Note: for negative mass flow, the scalar model remaps wall temperatures using
-the cumulative volumes of ``_last_volumes``, which are not flipped into the
-flow direction like the rest of the state. This is replicated here verbatim
-to guarantee identical results.
 """
 
 import numpy as np
@@ -288,12 +283,10 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     sv = np.where(staying, vols3, 0.0)
     t_avg = (sv * temps3).sum(axis=1) / sv.sum(axis=1)
 
-    # Remap wall temperatures onto the new parcel grid of flowing pipes. As
-    # in the scalar model, the old grid comes from _last_volumes, which for
-    # reversed pipes is NOT flipped into flow direction (see module notes).
+    # Remap wall temperatures onto the new parcel grid of flowing pipes;
+    # `volumes` is the old grid already flipped into flow direction
     wall2 = _pad(new_wall_temps, starts, counts, W)
-    last_vols = np.concatenate([c._last_volumes for c in pipes])
-    last_cumsum = np.cumsum(_pad(last_vols, starts, counts, W), axis=1)
+    last_cumsum = np.cumsum(_pad(volumes, starts, counts, W), axis=1)
     stay_cumsum = np.cumsum(sv, axis=1)
     wall3 = _interp_rows(
         x=stay_cumsum,
