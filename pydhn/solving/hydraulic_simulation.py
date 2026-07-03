@@ -36,7 +36,6 @@ def _assign_node_pressure(net, source=None):
     edges using depth first search. An initial value must be given for the
     starting node (source) in the Network.
     """
-    # Get the undirected Network graph
     G = net._graph
     # Find source if not specified
     if source is None:
@@ -52,23 +51,20 @@ def _assign_node_pressure(net, source=None):
             idx = idx.item()
         u, v = edges[idx]
         p = np.nan_to_num(net[(u, v)]["static_pressure"], copy=True, nan=1e6)
-        net.set_node_attributes({v: p}, "pressure")
+        pressures = {v: p}
+        source = v
     else:
         # The source node is expected to already have its pressure set
-        v = source
+        pressures = {source: net[source]["pressure"]}
 
-    edges = list(net._graph.edges())  # TODO: speed this up
-    for u, v in nx.dfs_edges(G.to_undirected(), source=v):
-        if (u, v) in edges:
-            dp = net[(u, v)]["delta_p"]
-            new_p = net[u]["pressure"] - dp
-
-        elif (v, u) in edges:
-            dp = net[(v, u)]["delta_p"]
-            new_p = net[u]["pressure"] + dp
+    # DFS on an undirected view visits edges in both directions: check the
+    # directed graph to apply delta_p with the right sign
+    for u, v in nx.dfs_edges(G.to_undirected(as_view=True), source=source):
+        if G.has_edge(u, v):
+            pressures[v] = pressures[u] - net[(u, v)]["delta_p"]
         else:
-            raise ValueError(f"Edge ({u}, {v}) not found!")
-        net.set_node_attributes({v: new_p}, "pressure")
+            pressures[v] = pressures[u] + net[(v, u)]["delta_p"]
+    net.set_node_attributes(pressures, "pressure")
 
 
 def solve_hydraulics(
