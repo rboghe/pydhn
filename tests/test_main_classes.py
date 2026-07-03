@@ -285,6 +285,29 @@ class AbstractNetworkTestCase(unittest.TestCase):
         test_names = net.get_edges_with_attribute("test_attribute", value)
         np.testing.assert_equal(test_names, target_names)
 
+    def test_component_cache_invalidation(self):
+        """
+        Edge attribute reads must reflect edges added after the component
+        cache has been built, and masked setters must honor the mask order.
+        """
+        net = star_network()
+        names = net.get_edges_attribute_array("name")  # builds the cache
+        net.add_node("S9", x=5.0, y=1.0, z=0.0)
+        net.add_pipe("SP9", "S6", "S9", length=10, line="supply")
+        new_names = net.get_edges_attribute_array("name")
+        self.assertEqual(len(new_names), len(names) + 1)
+        self.assertIn("SP9", new_names)
+
+        # Masked write/read roundtrip
+        mask = np.array([2, 5])
+        net.set_edge_attributes([11.0, 22.0], "test_attribute", mask=mask)
+        _, values = net.edges("test_attribute", mask=mask)
+        np.testing.assert_array_equal(values, [11.0, 22.0])
+
+        # Single-element data list behaves like a string (returns a flat array)
+        _, arr = net.edges(data=["test_attribute"], mask=mask)
+        np.testing.assert_array_equal(arr, [11.0, 22.0])
+
     def test_valve_and_pump_masks(self):
         """
         Test that valve and pump masks identify BranchValve and BranchPump

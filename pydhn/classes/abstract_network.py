@@ -58,6 +58,7 @@ class AbstractNetwork:
         self._caching = caching
         self._node_cache = defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
         self._edge_cache = None
+        self._component_cache = None
         self._mask_cache = dict()  # TODO: implement
         self._matrix_cache = dict()
 
@@ -158,6 +159,7 @@ class AbstractNetwork:
         self._caching = iscaching
         self._node_cache = defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
         self._edge_cache = None
+        self._component_cache = None
         self._mask_cache = dict()
         self._matrix_cache = dict()
 
@@ -452,8 +454,7 @@ class AbstractNetwork:
         self._graph.add_edge(start_node, end_node, name=name, **kwargs)
 
         # Clear cache
-        self._edge_cache = None
-        self._matrix_cache.clear()
+        self._reset_caches()
 
     def set_node_attribute(self, value: Any, name: str) -> None:
         """
@@ -528,9 +529,11 @@ class AbstractNetwork:
             array(['blue', 'red', 'blue'], dtype='<U4')
 
         """
-        for u, v in self._get_edge_pointer(mask).edges():
-            self._graph[u][v]["component"].set(name, value)
-        # self._edge_cache.pop(name, None)
+        comps = self._get_cached_components()
+        if mask is None:
+            mask = range(self.n_edges)
+        for i in mask:
+            comps[i].set(name, value)
 
     def set_node_attributes(self, values: Union[dict, np.array], name: str) -> None:
         """
@@ -644,14 +647,15 @@ class AbstractNetwork:
                 values = values[mask]
         if type(values) == dict:
             # Only use edges that are both in the dictionary and in the mask
-            edges = list(self._get_edge_pointer(mask).edges())
-            edges = list(edges & values.keys())
-            values_dict = {k: values[k] for k in edges}
+            edges = self._get_edge_pointer(mask).edges() & values.keys()
+            for u, v in edges:
+                self._graph[u][v]["component"].set(name, values[(u, v)])
         else:
-            values_dict = dict(zip(self._get_edge_pointer(mask).edges(), values))
-        for k, v in values_dict.items():
-            self._graph[k[0]][k[1]]["component"].set(name, v)
-        # self._edge_cache.pop(name, None)
+            comps = self._get_cached_components()
+            if mask is None:
+                mask = range(self.n_edges)
+            for i, v in zip(mask, values):
+                comps[i].set(name, v)
 
     # Getters #################################################################
     # Methods to get nodes and edges as well as their attributes.
@@ -713,6 +717,20 @@ class AbstractNetwork:
             edges = np.array(self._graph.edges())
         return edges
 
+    def _get_cached_components(self):
+        """
+        Returns the list of edge components in the order of edges in the class.
+        Components are mutable, so the cached list stays valid until edges are
+        added or removed. Callers must not modify the returned list.
+        """
+        if not self.caching:
+            return [d for _, _, d in self._graph.edges(data="component")]
+        if self._component_cache is None:
+            self._component_cache = [
+                d for _, _, d in self._graph.edges(data="component")
+            ]
+        return self._component_cache
+
     def get_edges_attribute_array(self, attribute: str) -> np.array:
         """
         Returns an array containing the values of the specified attribute for
@@ -751,12 +769,7 @@ class AbstractNetwork:
             array(['Blue', 'nan', 'Red'], dtype='<U32')
 
         """
-        edges = self._get_cached_edges()
-        ls = [np.nan] * self.n_edges
-        for i, (u, v) in enumerate(edges):
-            ls[i] = self._graph[u][v]["component"][attribute]
-        arr = np.array(ls)
-        return arr
+        return np.array([c[attribute] for c in self._get_cached_components()])
 
     def get_nodes_with_attribute(self, attribute: str, value: Any) -> np.array:
         """
@@ -940,23 +953,14 @@ class AbstractNetwork:
         if data is None:
             return edges
         if type(data) == str:
+            data, single = [data], True
+        elif len(data) == 1:
             single = True
-            ls = [np.nan] * len(mask)
-            for i, (u, v) in enumerate(edges):
-                ls[i] = self._graph[u][v]["component"][data]
-        else:
-            if len(data) == 1:
-                data = [data]
-                single = True
-            ls = [[np.nan] * len(mask) for _ in range(len(data))]
-            for i, (u, v) in enumerate(edges):
-                for j, a in enumerate(data):
-                    ls[j][i] = self._graph[u][v]["component"][a]
+        comps = self._get_cached_components()
+        arrs = [np.array([comps[i][a] for i in mask]) for a in data]
         if single:
-            return (edges, np.array(ls))
-        else:
-            arr = [np.array(l) for l in ls]
-            return (edges, *arr)
+            return (edges, arrs[0])
+        return (edges, *arrs)
 
     # Plotting ################################################################
     # General utilities for plotting.
@@ -1021,9 +1025,15 @@ class AbstractNetwork:
         # pickle.dump(self._graph, open(f'{filename}.txt', 'w'))
         nx.write_gpickle(self._graph, f"{filename}.gpickle")
 
+    def _reset_caches(self):
+        self._edge_cache = None
+        self._component_cache = None
+        self._matrix_cache.clear()
+
     def load_graph(self, filename):
         # TODO: OWN FORMAT
         self._graph = nx.read_gpickle(f"{filename}.gpickle")
+        self._reset_caches()
 
     def save_gml(self, filename):
         def stringify(s):
@@ -1062,6 +1072,7 @@ class AbstractNetwork:
                 graph[u][v]["component"] = serialize_component(component)
 
         self._graph = graph
+        self._reset_caches()
 
     def to_geojson(self, filename, target="all"):
         graph_to_geojson(self._graph, filename, target)
