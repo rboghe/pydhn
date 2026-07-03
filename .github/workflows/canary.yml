@@ -1,0 +1,42 @@
+name: Canary (latest deps)
+
+# Early-warning signal for upcoming breakage from newer dependency releases.
+# Runs on a schedule (not on PRs), so a failure never gates a merge.
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays, 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  latest:
+    name: latest everything (py3.13)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      # Latest of every dependency, ignoring the package's version caps, to
+      # surface the next majors before we declare support.
+      - name: Install latest dependencies
+        run: pip install -U numpy scipy networkx pandas matplotlib plotly geopandas openpyxl
+
+      # Install the package without touching the (already-latest) deps, so its
+      # caps don't pull them back down.
+      - name: Install package (no deps)
+        run: pip install --no-deps .
+
+      - name: Show resolved versions
+        run: pip list
+
+      # geopandas is imported directly: the suite only imports it lazily, so
+      # running the tests alone would not exercise the geopandas ABI.
+      - name: Import check (package + geopandas)
+        run: python -c "import pydhn; import geopandas; print('import OK')"
+
+      - name: Run tests
+        run: python -m unittest -b

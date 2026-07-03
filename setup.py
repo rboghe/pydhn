@@ -23,11 +23,11 @@ setup(
     author_email="roberto.boghetti@idiap.ch, giuseppe.peronato@idiap.ch",
     license="AGPL v3",
     packages=["pydhn"],
-    python_requires=">=3.9,<3.13",
+    python_requires=">=3.10,<3.14",
     install_requires=[
         "numpy>=1.25.2,<3",
         "scipy>=1.11",
-        "networkx>=2.6,<3",
+        "networkx>=2.6,<4",
         "matplotlib",
         "pandas",
         "geopandas>=0.13.2,<0.14",

@@ -3,33 +3,128 @@ name: Run Tests
 on: [push, pull_request]
 
 jobs:
-  test:
+  # Reproducible run against the committed poetry.lock, across supported Pythons.
+  locked:
+    name: locked (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.9, '3.10', 3.11, 3.12]
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies with Poetry
-        run: |
-          pip install poetry
-          poetry install
+      # Pin Poetry to the major that produced poetry.lock so the lock format
+      # matches and `poetry check --lock` stays meaningful across runners.
+      - name: Install Poetry (pinned)
+        run: pip install "poetry>=2.0,<3.0"
 
-      - name: Run Tests with Coverage
-        if: ${{ matrix.python-version == 3.12 }}
+      - name: Check that poetry.lock is consistent with pyproject.toml
+        run: poetry check --lock
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run tests with coverage
+        if: ${{ matrix.python-version == '3.12' }}
         run: |
           poetry run coverage run --source ./pydhn -m unittest -b
           poetry run coverage report -m
 
-      - name: Run Tests
-        if: ${{ matrix.python-version != 3.12 }}
-        run: |
-          poetry run python -m unittest -b
+      - name: Run tests
+        if: ${{ matrix.python-version != '3.12' }}
+        run: poetry run python -m unittest -b
+
+  # Extremes of the declared dependency ranges:
+  #   - floor (only feasible on old Pythons);
+  #   - ceiling, for each numpy major across the Python range.
+  compat:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: lowest (py3.10)
+            python: '3.10'
+            resolution: lowest-direct
+            deps: '"numpy>=1.25.2,<2" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy1 ceiling (py3.12)
+            python: '3.12'
+            resolution: highest
+            deps: '"numpy>=1.25.2,<2" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy2 (py3.10)
+            python: '3.10'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy2 (py3.11)
+            python: '3.11'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          # numpy 2 with the networkx 3.x ceiling (validated: nx 3.6 passes).
+          - label: numpy2 + networkx3 (py3.12)
+            python: '3.12'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=3,<4" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+          - label: numpy2 (py3.13)
+            python: '3.13'
+            resolution: highest
+            deps: '"numpy>=2,<3" "scipy>=1.11.2,<2" "networkx>=2.6,<3" "pandas>=2.0.3,<3" "plotly>=5.16.1,<6" "matplotlib>=3.7.2,<4" "openpyxl>=3.1.2"'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies (${{ matrix.resolution }})
+        run: uv pip install --system --resolution ${{ matrix.resolution }} ${{ matrix.deps }}
+
+      - name: Show resolved versions
+        run: uv pip list
+
+      - name: Run tests
+        run: python -m unittest -b
+
+  # Validates the full dependency set.
+  install:
+    name: install (full deps, numpy ${{ matrix.numpy-major }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - numpy-major: '1'
+            numpy: '>=1.25.2,<2'
+          - numpy-major: '2'
+            numpy: '>=2,<3'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install the package with its full declared dependencies
+        run: pip install "numpy${{ matrix.numpy }}" .
+
+      # geopandas is imported directly: pydhn only imports it lazily, so
+      # importing the package alone would not exercise the geopandas ABI.
+      - name: Import check (package + geopandas)
+        run: python -c "import pydhn; import geopandas; print('import OK')"
