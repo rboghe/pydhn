@@ -66,15 +66,19 @@ def compute_storage_temp_net(net, fluid, soil, ts_id=None):
     cols = np.arange(N)[None, :]
     valid = cols < n_layers[:, None]
 
-    # Restore state on repeated time steps, then snapshot it; per-tank
+    # Restore state on repeated time steps, then snapshot it. Per-tank
     # scalars are computed here so that they stay bitwise equal to the
-    # scalar model
+    # scalar model; in particular, fluid properties are evaluated with
+    # scalar calls, since the array kernels of the power ufunc can round
+    # differently on some platforms
     temps = np.zeros((S, N))
-    t_mean = np.empty(S)
     layer_volume = np.empty(S)
     section_area = np.empty(S)
     dz = np.empty(S)
     ua = np.zeros((S, N))
+    cp = np.empty(S)
+    rho = np.empty(S)
+    k_fluid = np.empty(S)
     for s, c in enumerate(tanks):
         if c._last_ts is not None and c._last_ts == ts_id:
             c._layer_temperatures = c._last_layer_temperatures.copy()
@@ -82,11 +86,14 @@ def compute_storage_temp_net(net, fluid, soil, ts_id=None):
         c._last_layer_temperatures = c._layer_temperatures.copy()
         n = n_layers[s]
         temps[s, :n] = c._layer_temperatures
-        t_mean[s] = c._layer_temperatures.mean()
         layer_volume[s] = c._layer_volume
         section_area[s] = c._section_area
         dz[s] = c._dz
         ua[s, :n] = c._ua_layers
+        t_mean = c._layer_temperatures.mean()
+        cp[s] = fluid.get_cp(t_mean)
+        rho[s] = fluid.get_rho(t_mean)
+        k_fluid[s] = fluid.get_k(t_mean)
 
     # Inlet temperature from the upstream node
     nodes, t_nodes = net.nodes(data="temperature")
@@ -101,9 +108,7 @@ def compute_storage_temp_net(net, fluid, soil, ts_id=None):
     mdot = np.abs(mdot_signed)
     flow = mdot_signed != 0
     charging = mdot_signed > 0
-    cp = fluid.get_cp(t_mean)
-    rho = fluid.get_rho(t_mean)
-    g_cond = (fluid.get_k(t_mean) + delta_k) * section_area / dz
+    g_cond = (k_fluid + delta_k) * section_area / dz
     capacity = rho * layer_volume * cp
     adv = mdot * cp
     n_sub = np.maximum(1, np.ceil(mdot * stepsize / (rho * layer_volume)).astype(int))
