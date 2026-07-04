@@ -18,6 +18,7 @@ from pydhn.components.base_components_thermal import compute_cons_temp_net
 from pydhn.components.base_components_thermal import compute_pipe_temp_net
 from pydhn.components.base_components_thermal import compute_prod_temp_net
 from pydhn.components.lagrangian_pipe_thermal import compute_lagrangian_temp_net
+from pydhn.components.stratified_storage_thermal import compute_storage_temp_net
 
 COMPONENT_FUNCTIONS_DICT = defaultdict(lambda: None)
 
@@ -40,4 +41,9 @@ COMPONENT_FUNCTIONS_DICT["base_branch_valve"] = {"delta_p": compute_dp_valve_net
 COMPONENT_FUNCTIONS_DICT["lagrangian_pipe"] = {
     "delta_p": compute_dp_pipe_net,
     "temperatures": compute_lagrangian_temp_net,
+}
+
+# Add stratified storage
+COMPONENT_FUNCTIONS_DICT["stratified_storage"] = {
+    "temperatures": compute_storage_temp_net,
 }
