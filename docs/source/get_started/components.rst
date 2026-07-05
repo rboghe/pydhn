@@ -561,7 +561,7 @@ The base producer can enforce three different types of setpoints for the thermal
 			\theta_{out} = min\left\{ \theta _{set}, \frac{ Q_{max}}{\dot m c_p} + \theta_{in}\right\}
 			\end{equation}
 
-    This behaviour has changed in the current `main` branch and is only present in versions `<=0.1.3.`.
+    This behaviour has changed in version `0.1.4` and is only present in versions `<=0.1.3`.
 
 
 
