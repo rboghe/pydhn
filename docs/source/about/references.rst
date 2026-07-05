@@ -6,6 +6,8 @@ References
 
 .. [DeAl19] Dénarié, A., Aprile, M. and Motta, M. (2019). Heat transmission over long pipes: New model for fast and accurate district heating simulations. Energy, 166, pp.267–276. doi: https://doi.org/10.1016/j.energy.2018.09.186
 
+.. [Klei93] Kleinbach, E.M., Beckman, W.A. and Klein, S.A. (1993). Performance study of one-dimensional models for stratified thermal storage tanks. Solar Energy, 50(2), pp.155–166. doi: https://doi.org/10.1016/0038-092X(93)90087-5
+
 .. [CzWo98] Czeslaw Oleskowicz Popiel and Wojtkowiak, J. (1998). Simple Formulas for Thermophysical Properties of Liquid Water for Heat Transfer Calculations (from 0°C to 150°C). Heat Transfer Engineering, 19(3), pp.87–101. doi: https://doi.org/10.1080/01457639808939929.
 
 .. [RoDa03] Robinson, D. (2003) ‘CLIMATE AS A PRE-DESIGN TOOL’, in Proceedings of Building Simulation 2003: 8th Conference of IBPSA. Eindhoven, Netherlands: IBPSA (Building Simulation), pp. 1109–1116. doi: https://doi.org/10.26868/25222708.2007.1109-1116.

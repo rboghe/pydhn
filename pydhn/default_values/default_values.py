@@ -118,6 +118,22 @@ K_SOIL = 0.5  #: Thermal conductivity (W/m·K)
 T_SOIL = 8.0  #: Temperature of the soil (°C)
 
 
+"""Default values for stratified storages"""
+STORAGE_VOLUME = 10.0  #: Water volume of the tank (m³)
+STORAGE_HEIGHT = 2.0  #: Height of the tank (m)
+STORAGE_N_LAYERS = 10  #: Number of vertical layers
+#: Overall heat loss coefficient of the tank envelope (W/(m²·K))
+STORAGE_U_VALUE = 0.5
+#: Additional vertical conductivity accounting for destratification, e.g.
+#: through the tank wall (W/(m·K))
+STORAGE_DELTA_K = 0.0
+T_AMBIENT = 20.0  #: Ambient temperature around indoor components (°C)
+SETPOINT_TYPE_HYD_STORAGE = "mass_flow"  #: Default storages hydraulic setpoint type
+#: Default storages hydraulic setpoint value (kg/s): positive charges the
+#: tank from the start node, negative discharges it
+SETPOINT_VALUE_HYD_STORAGE = 0.0
+
+
 """Default values of CitySim"""
 # Pumps:
 A0 = 1200000.0  #: First parameter of the characteristic curve (Pa)
