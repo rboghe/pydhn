@@ -100,6 +100,18 @@ More complex logic can also be implemented by modifying the method :meth:`~pydhn
     >>> print(my_comp._attrs['test_value'])
     5
 
+For efficiency, components can also declare which keys their control logic
+handles in the class attribute ``_controlled_keys``, so that lookups of all
+other attributes skip the call to
+:meth:`~pydhn.components.abstract_component.Component._run_control_logic`
+entirely::
+
+    class MyComp(Component):
+        _controlled_keys = frozenset({"test_value"})
+
+If ``_controlled_keys`` is not declared, the control logic is run for every
+attribute lookup as in earlier versions.
+
 
 Finally, for each component two private methods defining the functioning during simulations need to be implemented: :meth:`~pydhn.components.abstract_component.Component._compute_delta_p` and :meth:`~pydhn.components.abstract_component.Component._compute_temperatures`.
 

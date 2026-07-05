@@ -24,10 +24,32 @@ from pydhn.default_values import TEMPERATURE
 from pydhn.utilities import docstring_parameters
 
 
+class _AllKeys:
+    """Sentinel matching any key, used as _controlled_keys for subclasses
+    that override _run_control_logic without declaring which keys it
+    handles."""
+
+    def __contains__(self, key):
+        return True
+
+
+_ALL_KEYS = _AllKeys()
+
+_SPECIAL_GETTERS = {
+    "component_type": "_get_type",
+    "component_class": "_get_class",
+    "is_ideal": "_get_is_ideal",
+}
+
+
 class Component:
     """
     Base class for components
     """
+
+    # Keys that _run_control_logic can handle: lookups of other keys skip the
+    # control logic call entirely
+    _controlled_keys: frozenset = frozenset()
 
     @docstring_parameters(
         TEMPERATURE=TEMPERATURE,
@@ -66,23 +88,29 @@ class Component:
         self._type = "base_component"
         self._is_ideal = True
 
+        # Legacy custom components that override _run_control_logic without
+        # declaring _controlled_keys keep the behavior of running it on every
+        # lookup
+        if (
+            type(self)._run_control_logic is not Component._run_control_logic
+            and not self._controlled_keys
+        ):
+            self._controlled_keys = _ALL_KEYS
+
         # Initialize the component
         self._initialized = False
         self._attrs = kwargs
         self._reinitialize(overwrite=False)
 
     def __getitem__(self, key):
-        if key == "component_type":
-            return self._get_type()
-        elif key == "component_class":
-            return self._get_class()
-        elif key == "is_ideal":
-            return self._get_is_ideal()
-        att = self._run_control_logic(key)
-        if att is None:
-            return self._attrs.get(key, np.nan)
-        else:
-            return att
+        getter = _SPECIAL_GETTERS.get(key)
+        if getter is not None:
+            return getattr(self, getter)()
+        if key in self._controlled_keys:
+            att = self._run_control_logic(key)
+            if att is not None:
+                return att
+        return self._attrs.get(key, np.nan)
 
     def _reinitialize(self, overwrite=False):
         keys = [

@@ -152,6 +152,8 @@ class Consumer(Component):
         self._attrs.update(input_dict)
         self._attrs.update(kwargs)
 
+    _controlled_keys = frozenset({"setpoint_value_hyd"})
+
     def _run_control_logic(self, key, cp_fluid=CP_FLUID):
         if key == "setpoint_value_hyd":
             if (

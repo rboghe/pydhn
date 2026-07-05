@@ -32,6 +32,8 @@ class BranchPump(Component):
         kwargs["setpoint_value_hyd"] = setpoint_value_hyd
         self._attrs.update(kwargs)
 
+    _controlled_keys = frozenset({"setpoint_type_hyd"})
+
     def _run_control_logic(self, key, cp_fluid=CP_FLUID):
         # Ensure that the hydraulic setpoint type is always 'pressure'
         if key == "setpoint_type_hyd":
