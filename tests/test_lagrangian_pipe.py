@@ -46,6 +46,25 @@ def assert_mirrored(case, fwd_state, rev_state, step):
 
 
 class LagrangianPipeMirrorSymmetry(unittest.TestCase):
+    def test_solver_removes_roundoff_imaginary_parts(self):
+        matrix_a = np.array([[[-1.0, 1.0], [0.5, -1.5]]])
+        vector_b = np.array([[0.0], [4.0]])
+
+        temperatures = LagrangianPipe._solve_diff_sys(
+            matrix_A=matrix_a,
+            vector_b=vector_b,
+            x_0=np.array([60.0]),
+            y_0=np.array([50.0]),
+            stepsize=60.0,
+        )
+
+        for value in temperatures:
+            self.assertFalse(np.iscomplexobj(value))
+
+    def test_solver_rejects_significant_imaginary_parts(self):
+        with self.assertRaises(FloatingPointError):
+            LagrangianPipe._real_if_close(np.array([1.0 + 1e-3j]))
+
     def test_scalar_model(self):
         fluid, soil = Water(), Soil(temp=8)
         fwd, rev = LagrangianPipe(**PIPE_KWARGS), LagrangianPipe(**PIPE_KWARGS)

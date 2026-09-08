@@ -313,7 +313,23 @@ class LagrangianPipe(Pipe):
             + c1 * V1 * np.exp(l0 * stepsize)
             + c2 * W1 * np.exp(l1 * stepsize)
         )
-        return res1, res2
+        return LagrangianPipe._real_if_close(res1), LagrangianPipe._real_if_close(res2)
+
+    @staticmethod
+    def _real_if_close(values, rtol=1e-12, atol=1e-12):
+        """Return real values while rejecting meaningful imaginary parts."""
+        if not np.iscomplexobj(values):
+            return values
+
+        real = np.real(values)
+        imag = np.abs(np.imag(values))
+        scale = np.maximum(1.0, np.abs(real))
+        if np.any(imag > atol + rtol * scale):
+            raise FloatingPointError(
+                "Lagrangian pipe thermal solver produced a significant "
+                "imaginary component"
+            )
+        return real
 
     def _compute_temperatures(self, fluid, soil, t_in, ts_id=0):
         # If it is a repeated step, restore previous conditions

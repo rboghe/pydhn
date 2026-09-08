@@ -12,9 +12,9 @@
 Vectorized thermal model for LagrangianPipe components.
 
 Computes one thermal step for all lagrangian pipes of a network at once,
-replicating pipe-by-pipe `LagrangianPipe._compute_temperatures`. The ragged
-per-pipe parcel state is packed into flat (CSR-like) arrays for the physics
-and into zero-padded 2D arrays for the parcel displacement. 
+replicating pipe-by-pipe `LagrangianPipe._compute_temperatures`. The per-pipe 
+parcel state is packed into flat (CSR-like) arrays for the physics and into 
+zero-padded 2D arrays for the parcel displacement. 
 """
 
 import numpy as np
@@ -36,10 +36,10 @@ def _pad(values, starts, counts, width, fill=0.0):
 
 def _interp_rows(x, xp, fp, x_valid, xp_valid):
     """
-    Row-wise ``np.interp(x[i], xp[i], fp[i])`` on padded 2D arrays, using only
+    Row-wise `np.interp(x[i], xp[i], fp[i])` on padded 2D arrays, using only
     the entries flagged valid. Replicates np.interp semantics: same slope
     rounding, left/right clamping, and duplicate grid points resolving to the
-    last point with ``xp <= x``.
+    last point with `xp <= x`.
     """
     P, W = xp.shape
     n_xp = xp_valid.sum(axis=1)
@@ -69,7 +69,7 @@ def _interp_rows(x, xp, fp, x_valid, xp_valid):
 
 def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     """
-    Vectorized equivalent of ``LagrangianPipe._compute_temperatures`` for all
+    Vectorized equivalent of `LagrangianPipe._compute_temperatures` for all
     lagrangian pipes of ``net``. Returns per-pipe ``(t_in, t_out, t_avg,
     t_out_der, delta_q)`` in mask order and updates the pipes' parcel state.
     """
@@ -109,8 +109,7 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
         cp_wall,
     ) = np.array([[c._attrs[k] for k in keys] for c in pipes], dtype=float).T
 
-    # Restore state on repeated time steps, then snapshot it (as in the
-    # scalar model)
+    # Restore state on repeated time steps, then snapshot it
     for c in pipes:
         if c._last_ts is not None and c._last_ts == ts_id:
             c._volumes = c._last_volumes.copy()
@@ -121,8 +120,8 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
         c._last_temperatures = c._temperatures.copy()
         c._last_wall_temperatures = c._wall_temperatures.copy()
 
-    # Gather ragged parcel state into flat arrays; reversed pipes are flipped
-    # into flow direction
+    # Gather parcel state into flat arrays; reversed pipes are flipped into 
+    # flow direction
     reversed_ = mdot_signed < 0
     mdot = np.abs(mdot_signed)
     counts = np.fromiter((len(c._volumes) for c in pipes), int, count=P)
