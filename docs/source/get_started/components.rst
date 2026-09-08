@@ -733,7 +733,19 @@ Stratified Storage
      - leaf_component
      - True
 
-:class:`~pydhn.components.stratified_storage.StratifiedStorage` implements a dynamic thermal storage tank based on the one-dimensional multi-node ("multinode") model studied in [Klei93]_, the same family of models as TRNSYS Type 4. The tank is modelled as a vertical cylinder, always full, divided into :math:`N` layers of equal volume: the start node of the edge connects to the top of the tank and the end node to its bottom. It has the following main attributes:
+:class:`~pydhn.components.stratified_storage.StratifiedStorage` implements a
+dynamic thermal storage tank based on the one-dimensional multi-node
+("multinode") model studied in [Klei93]_, the same family of models as TRNSYS
+Type 4. The tank is a vertical cylinder divided into :math:`N` layers of equal
+volume. The start node of the edge connects to the top of the tank and the
+end node to its bottom.
+
+Each layer has a uniform temperature, but temperatures can differ between
+layers. The layers stay in the same positions while water flows through them;
+they are not moving parcels as in the Lagrangian pipe model. This allows the
+tank to represent warm water above colder water, although using only a few
+layers can spread the transition between hot and cold water too much.
+It has the following main attributes:
 
 .. list-table::
     :widths: 20 20 20 20 20
@@ -788,34 +800,155 @@ Stratified Storage
 Hydraulics
 """"""""""""
 
-The stratified storage is an ideal component with an imposed mass flow, working like the ``'mass_flow'`` mode of the :class:`~pydhn.components.base_producer.Producer` class described :ref:`here <BaseProdHyd>`. The sign of the setpoint selects the operating mode: a positive mass flow **charges** the tank, drawing water from the start node into the top and returning the content of the bottom to the end node, while a negative mass flow **discharges** it. Since the tank is always full, the same mass flow crosses both ports and no changes to the hydraulic solver are needed.
+The stratified storage is an ideal component with an imposed mass flow,
+working like the ``'mass_flow'`` mode of the
+:class:`~pydhn.components.base_producer.Producer` class described
+:ref:`here <BaseProdHyd>`. A positive setpoint sends water from the start node
+into the top of the tank and returns water from the bottom to the end node.
+A negative setpoint reverses this direction.
+
+With the top connected to the supply line and the bottom to the return line,
+positive flow normally **charges** the tank and negative flow **discharges**
+it. Whether the tank gains or releases heat depends on the inlet and tank
+temperatures. The tank always remains full: the same mass flow enters one
+port and leaves the other.
 
 Thermal
 """"""""""""
 
-Each layer :math:`i` (with :math:`i = 0` at the top) exchanges heat with its neighbours by advection and conduction, and with the ambient through the tank envelope:
+Each layer :math:`i` (with :math:`i = 0` at the top) exchanges heat with its
+neighbours through water flow (advection) and conduction, and with the
+surroundings through the tank walls and ends:
 
 .. math::
 
 	\begin{equation}\label{storage_layer}
-	\rho V_l c_p \frac{d\theta_i}{dt} = UA_i \left(\theta_{amb} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i-1} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i+1} - \theta_i\right) + \dot m c_p \left(\theta_{up(i)} - \theta_i\right)
+	\rho V_l c_p \frac{d\theta_i}{dt} = UA_i \left(\theta_{amb} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i-1} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i+1} - \theta_i\right) + |\dot m| c_p \left(\theta_{up(i)} - \theta_i\right)
 	\end{equation}
 
-where :math:`V_l = V/N` is the layer volume, :math:`A_c = V/H` the cross-section, :math:`\Delta z = H/N` the layer height and :math:`k_{eff} = k_f + \Delta k` the effective vertical conductivity, with the optional :math:`\Delta k` accounting for destratification, for example through the tank wall. The envelope loss coefficient :math:`UA_i` is computed from the lateral surface of each layer, with the top and bottom layers also losing through the tank ends. The upstream neighbour :math:`up(i)` follows the flow direction: when charging, water moves downwards and the top layer receives the inlet temperature, and vice versa when discharging. Fluid properties are evaluated once per step at the mean tank temperature.
+where :math:`V_l = V/N` is the layer volume, :math:`A_c = V/H` the
+cross-sectional area and :math:`\Delta z = H/N` the layer height. The vertical
+thermal conductivity is :math:`k_{eff} = k_f + \Delta k`: the optional
+:math:`\Delta k` represents additional heat transfer between layers, for
+example through the tank wall. A conduction term is omitted where there is
+no neighbouring layer, at the top or bottom of the tank.
 
-The system is integrated with the backward Euler method. Each step is divided into
+The heat loss coefficient :math:`UA_i` includes the side wall of each layer.
+The top and bottom layers also exchange heat through the tank ends. The
+upstream temperature :math:`\theta_{up(i)}` is the temperature of the layer
+from which water arrives, or the inlet temperature at the entry port.
+For positive flow, water moves downwards; for negative flow, it moves upwards.
+
+**Time integration and mixing.** One simulation step advances the tank by
+``stepsize`` seconds, denoted :math:`\Delta s`. The model divides this interval
+into smaller calculation steps, called substeps, and uses the third-order
+strong-stability-preserving Runge--Kutta method (SSPRK3) to update temperatures.
+
+The substep duration depends on how quickly flow, conduction and heat losses
+can change a layer's temperature. This is described by a coefficient
+:math:`a_i`, in :math:`s^{-1}`:
+
+.. math::
+
+    a_i = \frac{UA_i + n_i k_{eff} A_c / \Delta z + |\dot m|c_p}
+               {\rho V_l c_p}
+
+Here :math:`n_i` is the number of neighbouring layers: one at each end, two
+in the interior, or zero for a single-layer tank. The model chooses a substep
+duration satisfying
 
 .. math::
 
 	\begin{equation}\label{storage_substeps}
-	n_{sub} = \left\lceil \frac{\lvert\dot m\lvert \Delta s}{\rho V_l} \right\rceil
+	\Delta t_{sub} \leq \min\left(\Delta s, \frac{0.1}{\max_i a_i}\right).
 	\end{equation}
 
-sub-steps, so that at most one layer volume is flushed per solve. The outlet temperature is the average over the sub-steps of the temperature of the outlet layer, the bottom one when charging and the top one when discharging. After each sub-step, temperature inversions are removed by mixing the affected layers at their energy-conserving mean. If the mass flow is zero, the tank simply decays towards the ambient temperature and the outlet temperature is the temperature of the bottom layer.
+and repeats it until the simulation step is complete. The last substep is
+shortened if necessary: for example, a 100 s interval could be evaluated as
+30 + 30 + 30 + 10 s. If all :math:`a_i` are zero, there is no advection,
+conduction or heat exchange with the surroundings, so one substep is used.
+The mixing calculation described below still applies.
 
-During network simulations, the solver uses the vectorized implementation in :mod:`~pydhn.components.stratified_storage_thermal`, which advances all storages of the network at once and gives results identical to the component method.
+Each Runge--Kutta substep uses three temperature updates,
+called stages. After each stage, the model checks for a **temperature
+inversion**, where a lower layer is warmer than the layer above it. To
+represent buoyancy-driven mixing, these layers are given a common temperature
+equal to their average. More adjacent layers are included if necessary,
+until no warmer layer remains below a colder one. This conserves energy
+because all layers have the same heat capacity within the simulation step.
+The next stage then uses the mixed temperatures to calculate heat transfer.
 
-The component keeps an internal memory of the layer temperatures:
+**Reported temperatures.** The outlet temperature is the average temperature
+of the water leaving during the simulation step. It is calculated by
+integrating the bottom-layer temperature for positive flow, or the top-layer
+temperature for negative flow, over ``stepsize`` seconds and dividing by that
+duration. Water arriving from other layers changes this outlet-layer
+temperature as the step progresses. The integration uses the same
+Runge--Kutta weights as the layer equations, so the reported heat exchange is
+consistent with the change in stored energy and the heat exchanged with the
+surroundings.
+
+The model also computes :math:`dT_{out}/dT_{in}`, used by the network thermal
+solver. This derivative describes how the average outlet temperature changes
+when the inlet temperature changes, including the effect of mixing layers.
+
+The returned ``t_avg`` is the average of all layer temperatures **at the end
+of the simulation step**. It does not describe how temperatures changed
+during that step. To calculate the energy lost to the surroundings, each
+layer's heat loss rate :math:`UA_i(\theta_i-\theta_{amb})` must be integrated
+over the step; using only ``t_avg`` would generally give a different result.
+For a single flowing layer, the average outlet temperature also provides the
+average temperature needed to calculate that layer's heat loss.
+
+**Zero flow.** When the mass flow is zero, no water enters or leaves, but
+conduction, heat exchange with the surroundings and mixing can still change
+the layer temperatures. Calling the component's temperature method directly
+with zero flow returns the final top temperature as ``t_in`` and the final
+bottom temperature as ``t_out``, with zero heat exchange through the ports.
+
+During network simulations, the thermal solver temporarily replaces zero
+edge flows with very small signed values, :math:`\pm 10^{-16}` kg/s by
+default. This lets it calculate temperatures at nodes connected to idle
+components. The tank then uses its usual flow-direction rules and returns
+an average outlet temperature. The small flow causes negligible water
+movement and heat transport. The original zero flows are restored after
+component temperatures are calculated, including on an exception or Ctrl+C.
+
+**Fluid properties.** Density, specific heat capacity and conductivity are
+evaluated at the average tank temperature at the start of each simulation
+step. These values are kept constant during all substeps. If the network
+solver repeats the calculation while finding node temperatures, the tank
+restarts from the same saved temperatures and fluid properties.
+
+Each step conserves energy using the density and heat capacity selected for
+that step. With ``Water``, these properties can change between steps. The
+reported heat flows may therefore not exactly account for the change in
+stored energy calculated with temperature-dependent properties, even when
+heat losses are included. In particular,
+``delta_q`` uses one value of :math:`c_p` for the whole tank and step.
+``ConstantWater`` avoids this approximation by using constant properties.
+Smaller internal substeps improve the integration accuracy but do not change
+how fluid properties are evaluated.
+
+For example, a test uses a lossless 2 m³, 2 m high, 10-layer tank initially at
+50 °C. It charges for ten 600 s steps at +0.1 kg/s with an 80 °C inlet, then
+discharges for ten steps at -0.1 kg/s with a 30 °C inlet. The test calculates
+stored energy from the temperature-dependent volumetric heat capacity:
+
+.. math::
+
+    E = V_l\sum_i\int_{50\,^{\circ}C}^{\theta_i}\rho(T)c_p(T)\,dT.
+
+The change in this energy plus the reported heat supplied to the network is
+about -0.19 MJ, compared with 177 MJ of total heat transferred during charging
+and discharging (about -0.107%). This is one example of the approximation's
+effect, not an error bound for other operating conditions or a model of
+thermal expansion.
+
+During network simulations, the vectorized implementation in
+:mod:`~pydhn.components.stratified_storage_thermal` calculates all tank
+temperatures together and gives the same results as the component method.
+The component stores its layer temperatures between simulation steps:
 
 .. doctest::
 
@@ -834,8 +967,8 @@ The component keeps an internal memory of the layer temperatures:
 	>>> # Simulate one time-step with inlet temperature of 70°C
 	>>> _ = comp._compute_temperatures(fluid=fluid, soil=soil, t_in=70, ts_id=0)
 	>>> # The hot water entered the top of the tank
-	>>> print(comp._layer_temperatures)
-	[54.64524282 51.08482648 50.25334488 50.05916491 50.01383465]
+	>>> print(comp._layer_temperatures.round(3))
+	[55.224 50.756 50.075 50.006 50.   ]
 
 
 Branch Valve

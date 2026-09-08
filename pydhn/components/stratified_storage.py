@@ -19,6 +19,8 @@ model ("multinode" model, TRNSYS Type 4 lineage) described in:
 """
 
 
+from numbers import Real
+
 import numpy as np
 
 from pydhn.components import Component
@@ -33,24 +35,6 @@ from pydhn.default_values import STORAGE_VOLUME
 from pydhn.default_values import T_AMBIENT
 from pydhn.default_values import TEMPERATURE
 from pydhn.utilities import docstring_parameters
-
-
-def _solve_tridiagonal(lower, diag, upper, rhs):
-    """
-    Solves a tridiagonal system with the Thomas algorithm. ``lower`` and
-    ``upper`` have one element less than ``diag``.
-    """
-    n = len(diag)
-    d, r = diag.copy(), rhs.copy()
-    for i in range(1, n):
-        w = lower[i - 1] / d[i - 1]
-        d[i] -= w * upper[i - 1]
-        r[i] -= w * r[i - 1]
-    x = np.empty(n)
-    x[-1] = r[-1] / d[-1]
-    for i in range(n - 2, -1, -1):
-        x[i] = (r[i] - upper[i] * x[i + 1]) / d[i]
-    return x
 
 
 class StratifiedStorage(Component):
@@ -69,8 +53,16 @@ class StratifiedStorage(Component):
     it. The tank is always full and each layer exchanges heat with its
     neighbours by advection and conduction, and with the ambient through the
     envelope. Temperature inversions are removed by mixing the affected
-    layers. Fluid properties are evaluated once per step at the mean tank
-    temperature.
+    layers at each Runge-Kutta stage. Fluid properties are evaluated once per
+    step at the initial mean tank temperature. With variable properties this
+    conserves the frozen-property balance of each step, not a global enthalpy
+    inventory; use ConstantWater for a consistent constant-property balance.
+    This is a fixed-inlet, two-port adaptation, without a
+    separate plume-entrainment model. Integration uses third-order SSP
+    Runge-Kutta steps limited by advection, conduction and envelope losses.
+    The outlet is averaged over the step; its derivative includes mixing.
+    The reported average tank temperature is the final spatial mean, not a
+    time average, and cannot be used directly to integrate ambient losses.
     """
 
     @docstring_parameters(
@@ -95,7 +87,9 @@ class StratifiedStorage(Component):
         setpoint_type_hyd=SETPOINT_TYPE_HYD_STORAGE,
         setpoint_value_hyd=SETPOINT_VALUE_HYD_STORAGE,
         stepsize=STEPSIZE,
-        **kwargs
+        temperature=TEMPERATURE,
+        initial_layer_temperatures=None,
+        **kwargs,
     ):
         """
         Constructs all the necessary attributes for the object.
@@ -107,7 +101,8 @@ class StratifiedStorage(Component):
         height : float, optional
             Height of the tank (m). The default is {}.
         n_layers : int, optional
-            Number of vertical layers. The default is {}.
+            Positive number of equal-volume vertical layers. Cannot be
+            changed after construction. The default is {}.
         u_value : float, optional
             Overall heat loss coefficient of the tank envelope (W/(m²·K)).
             The default is {}.
@@ -126,12 +121,26 @@ class StratifiedStorage(Component):
             start node, negative discharges it. The default is {}.
         stepsize : float, optional
             Size of a time-step (s). The default is {}.
+        temperature : float, optional
+            Uniform initial fluid temperature (°C). The default is 50.
+        initial_layer_temperatures : array-like, optional
+            Initial temperatures from top to bottom, with one value per
+            layer, in °C. Must have shape (n_layers,) and finite values.
+            The default is None, which uses ``temperature`` for all layers.
+            A supplied profile is copied and overrides the uniform value.
         **kwargs : dict
             Additional keyword arguments.
 
         Returns
         -------
-        None.
+        None
+            Initializes the component and its internal layer temperatures.
+
+        Raises
+        ------
+        ValueError
+            If a physical parameter or initial temperature profile is invalid,
+            or the hydraulic setpoint type is not "mass_flow".
 
         """
 
@@ -156,9 +165,101 @@ class StratifiedStorage(Component):
         }
 
         self._attrs.update(input_dict)
+        # Extra attributes include the mass flow supplied by the network solver
         self._attrs.update(kwargs)
+        self._attrs["temperature"] = temperature
+        for key, value in self._attrs.items():
+            self._validate_attribute(key, value)
 
-        # Compute useful characteristics
+        self._update_geometry()
+        # Layer 0 is the top; copy supplied profiles so the tank owns its state
+        if initial_layer_temperatures is None:
+            temps = np.full(n_layers, temperature, dtype=float)
+        else:
+            temps = np.array(initial_layer_temperatures, dtype=float, copy=True)
+            if temps.shape != (n_layers,) or not np.all(np.isfinite(temps)):
+                raise ValueError(
+                    "initial_layer_temperatures must contain one finite value per layer"
+                )
+        self._layer_temperatures = temps
+        self._attrs["temperature"] = temps.mean()
+        # Keep the start-of-step profile for repeated network iterations
+        self._last_layer_temperatures = temps.copy()
+        self._last_ts = None
+
+    @staticmethod
+    def _validate_attribute(key, value):
+        if key == "setpoint_type_hyd":
+            if value != "mass_flow":
+                raise ValueError('Storage only supports setpoint_type_hyd="mass_flow"')
+        elif key == "n_layers":
+            if (
+                isinstance(value, (bool, np.bool_))
+                or not isinstance(value, (int, np.integer))
+                or value < 1
+            ):
+                raise ValueError("n_layers must be a positive integer")
+        elif key in {
+            "volume",
+            "height",
+            "stepsize",
+            "u_value",
+            "delta_k",
+            "temperature",
+            "t_ambient",
+            "mass_flow",
+            "setpoint_value_hyd",
+        }:
+            if not isinstance(value, Real) or not np.isfinite(value):
+                raise ValueError(f"{key} must be a finite number")
+            if key in {"volume", "height", "stepsize"} and value <= 0:
+                raise ValueError(f"{key} must be positive")
+            if key in {"u_value", "delta_k"} and value < 0:
+                raise ValueError(f"{key} must be nonnegative")
+
+    def set(self, key, value):
+        """
+        Update attributes; layer count is fixed after construction.
+
+        Parameters
+        ----------
+        key : str
+            Name of the component attribute to update.
+        value : Any
+            New attribute value. Physical parameters must satisfy the same
+            constraints as during construction.
+
+        Returns
+        -------
+        None
+            Updates the component in place.
+
+        Raises
+        ------
+        ValueError
+            If the value is invalid or changes ``n_layers`` after construction.
+
+        Notes
+        -----
+        Changes to ``volume``, ``height`` or ``u_value`` rebuild the cached
+        geometry and loss conductances while retaining layer temperatures.
+        Setting ``temperature`` updates reporting metadata only; it does not
+        reset the internal temperature profile.
+        """
+        # Reject invalid updates before changing either attributes or cached state
+        self._validate_attribute(key, value)
+        if key == "n_layers" and hasattr(self, "_layer_temperatures"):
+            if value != self._attrs[key]:
+                raise ValueError("n_layers cannot be changed; construct a new tank")
+        super().set(key, value)
+        if key in {"volume", "height", "u_value"} and hasattr(self, "_ua_layers"):
+            self._update_geometry()
+
+    def _update_geometry(self):
+        volume, height = self._attrs["volume"], self._attrs["height"]
+        n_layers, u_value = self._attrs["n_layers"], self._attrs["u_value"]
+
+        # Equal-volume slices of a vertical cylinder share a cross-section
         self._layer_volume = volume / n_layers
         self._dz = height / n_layers
         self._section_area = volume / height
@@ -167,121 +268,59 @@ class StratifiedStorage(Component):
         # tank ends
         ua = np.full(n_layers, u_value * np.pi * diameter * self._dz)
         ua[0] += u_value * self._section_area
+        # For a single layer, both end caps belong to that same layer
         ua[-1] += u_value * self._section_area
         self._ua_layers = ua
 
-        # Tank internal status: layer 0 is the top (start-node side)
-        self._layer_temperatures = np.full(n_layers, TEMPERATURE, dtype=float)
-
-        # Tank internal status at the former time step
-        self._last_layer_temperatures = self._layer_temperatures.copy()
-
-        # Keep track of the last time step ID
-        self._last_ts = None
-
     @staticmethod
-    def _mix_inversions(temperatures):
+    def _mix_inversions(temperatures, sensitivity=None):
         """
         Removes temperature inversions by mixing the affected layers: going
         from the top down, every layer warmer than the (mixed) layers above
         it is pooled with them at their energy-conserving mean, so that the
         returned profile is non-increasing.
         """
-        sums, counts = [], []
-        for t in temperatures:
+        # Each stack entry represents a contiguous pool of equal-volume layers
+        sums, counts, derivatives = [], [], []
+        for i, t in enumerate(temperatures):
+            # Start with a single layer, then absorb any colder pools above it
             s, c = t, 1
+            if sensitivity is not None:
+                derivative = sensitivity[i]
+            # Merge upwards until the pool is no warmer than the one above
             while sums and sums[-1] * c < s * counts[-1]:  # mean above < mean
                 s += sums.pop()
                 c += counts.pop()
+                if sensitivity is not None:
+                    derivative += derivatives.pop()
             sums.append(s)
             counts.append(c)
+            if sensitivity is not None:
+                derivatives.append(derivative)
+        # Expand the pooled means back to one temperature per layer
         means = [s / c for s, c in zip(sums, counts)]
-        return np.repeat(means, counts)
+        mixed = np.repeat(means, counts)
+        if sensitivity is None:
+            return mixed
+        # Differentiate the same pools; at a mixing boundary this is the
+        # derivative of the selected piecewise-linear branch
+        return mixed, np.repeat([d / c for d, c in zip(derivatives, counts)], counts)
 
     # ------------------------------ Hydraulics ----------------------------- #
 
     def _compute_delta_p(self, fluid, compute_hydrostatic=False, ts_id=None):
+        # The imposed-flow ideal branch contributes no pressure-loss equation
         return 0.0, 0
 
     # ------------------------------- Thermal ------------------------------- #
 
     def _compute_temperatures(self, fluid, soil, t_in, ts_id=None):
-        # If it is a repeated step, restore previous conditions
-        if self._last_ts is not None:
-            if self._last_ts == ts_id:
-                self._layer_temperatures = self._last_layer_temperatures.copy()
+        # A direct call without an ID advances one step. Network solves
+        # supply a shared ID for all iterations of the same physical step
+        from pydhn.components.stratified_storage_thermal import (
+            _compute_storage_temperatures,
+        )
 
-        # Update internal memory
-        self._last_ts = ts_id
-        self._last_layer_temperatures = self._layer_temperatures.copy()
-
-        # Get attributes
-        stepsize = self._attrs["stepsize"]
-        mdot = self._attrs["mass_flow"]
-        t_amb = self._attrs["t_ambient"]
-        n = self._attrs["n_layers"]
-
-        temps = self._layer_temperatures
-
-        # Fluid properties at the mean tank temperature (constant within the
-        # step, so that the advection bookkeeping conserves energy exactly)
-        t_mean = temps.mean()
-        cp = fluid.get_cp(t_mean)
-        rho = fluid.get_rho(t_mean)
-        k_eff = fluid.get_k(t_mean) + self._attrs["delta_k"]
-
-        # Coupling terms (W/K): conduction between adjacent layers, envelope
-        # losses and advection
-        g_cond = k_eff * self._section_area / self._dz
-        capacity = rho * self._layer_volume * cp
-        adv = np.abs(mdot) * cp
-
-        # Sub-steps so that at most one layer volume is flushed per solve,
-        # keeping the outlet temperature sequence physical
-        n_sub = max(1, int(np.ceil(np.abs(mdot) * stepsize / (rho * self._layer_volume))))
-        dt = stepsize / n_sub
-
-        # Backward-Euler tridiagonal system: (C/dt + G) t_new = C/dt t_old + b
-        # Advection enters each layer from its upstream neighbour; layer 0 is
-        # the top, so charging (mdot > 0) flows downwards
-        lower = np.full(n - 1, -g_cond)
-        upper = np.full(n - 1, -g_cond)
-        diag = capacity / dt + self._ua_layers
-        diag[:-1] += g_cond  # one interface for the end layers, two for the
-        diag[1:] += g_cond  # interior ones
-        rhs_const = self._ua_layers * t_amb
-        if mdot > 0:
-            diag += adv
-            lower -= adv
-            rhs_const[0] += adv * t_in
-        elif mdot < 0:
-            diag += adv
-            upper -= adv
-            rhs_const[-1] += adv * t_in
-
-        out_idx = n - 1 if mdot >= 0 else 0
-        t_out_sum = 0.0
-        for _ in range(n_sub):
-            temps = _solve_tridiagonal(
-                lower, diag, upper, capacity / dt * temps + rhs_const
-            )
-            # Outlet is sampled before buoyant mixing so that the reported
-            # delta_q matches the tank internal energy change exactly
-            t_out_sum += temps[out_idx]
-            temps = self._mix_inversions(temps)
-
-        # Outlet temperature and energy exchanged with the network (Wh)
-        if mdot != 0:
-            t_out = t_out_sum / n_sub
-            delta_q = np.abs(mdot) * cp * (t_out - t_in) * stepsize / 3600.0
-        else:
-            t_out = temps[-1]
-            t_in = temps[0]
-            delta_q = 0.0
-
-        t_avg = temps.mean()
-
-        # Update internal memory
-        self._layer_temperatures = temps
-
-        return t_in, t_out, t_avg, 0.0, delta_q
+        # Reuse the batch equations and unwrap their one-tank output arrays
+        outputs = _compute_storage_temperatures([self], fluid, [t_in], ts_id)
+        return tuple(values[0] for values in outputs)

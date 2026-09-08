@@ -12,18 +12,20 @@ Equivalence tests between the vectorized storage thermal model
 (pydhn.components.stratified_storage_thermal) and the tank-by-tank
 reference implementation (StratifiedStorage._compute_temperatures).
 
-Since the batched Thomas sweeps and per-tank scalars replicate the scalar
-arithmetic operation by operation, results are required to be bitwise
-identical, not merely close.
+The shared integration kernel must remain independent of batch size and
+padding: results are required to be bitwise identical, not merely close.
 """
 
 import unittest
 from contextlib import contextmanager
+from contextlib import nullcontext
 from copy import deepcopy
+from unittest.mock import patch
 
 import numpy as np
 
 from pydhn.classes import Network
+from pydhn.components.stratified_storage_thermal import compute_storage_temp_net
 from pydhn.components.vector_functions import COMPONENT_FUNCTIONS_DICT
 from pydhn.fluids import Water
 from pydhn.soils import Soil
@@ -108,6 +110,106 @@ class StorageVectorEquivalence(unittest.TestCase):
         mass_flows = [rng.uniform(-0.5, 0.5, 4) for _ in range(STEPS)]
         ts_ids = np.repeat(np.arange(STEPS // 2), 2)
         self.assert_equivalent(mass_flows, ts_ids)
+
+    def test_partial_mask_preserves_unselected_tanks(self):
+        net = build_tanks_net()
+        net.set_edge_attributes(np.full(4, 0.5), "mass_flow")
+        net.set_node_attributes(np.full(8, 80.0), "temperature")
+        before = deepcopy(net)
+        result = compute_edge_temperatures(
+            net, Water(), SOIL, mask=np.array([0, 2]), set_values=True, ts_id=0
+        )
+        for i, edge in enumerate(net.edges()):
+            tank, old = net[tuple(edge)], before[tuple(edge)]
+            if i in (0, 2):
+                expected = old._compute_temperatures(Water(), SOIL, 80.0, 0)
+                np.testing.assert_array_equal([x[i] for x in result], expected)
+                np.testing.assert_array_equal(
+                    tank._layer_temperatures, old._layer_temperatures
+                )
+            else:
+                np.testing.assert_array_equal(
+                    tank._layer_temperatures, old._layer_temperatures
+                )
+                self.assertIsNone(tank._last_ts)
+                for key in ("temperature", "inlet_temperature", "outlet_temperature"):
+                    self.assertEqual(tank[key], old[key])
+
+    def test_empty_batch(self):
+        net = Network()
+        outputs = compute_storage_temp_net(net, Water(), SOIL)
+        self.assertEqual(len(outputs), 5)
+        for array in outputs:
+            self.assertEqual(array.shape, (0,))
+
+    def test_idle_ports_follow_solver_direction(self):
+        """Either epsilon orientation must feed the adjacent physical tank port."""
+        from pydhn.solving import solve_thermal
+
+        for vectorized in (True, False):
+            for direction in (-1, 1):
+                with self.subTest(vectorized=vectorized, direction=direction):
+                    net = Network()
+                    for name in ("A", "B", "C"):
+                        net.add_node(name, temperature=50.0)
+                    net.add_stratified_storage(
+                        "T",
+                        "A",
+                        "B",
+                        mass_flow=0.0,
+                        u_value=0.0,
+                        n_layers=4,
+                        initial_layer_temperatures=[80, 65, 40, 30],
+                    )
+                    net.add_pipe("P", "B", "C", mass_flow=0.0, length=1.0)
+                    net.add_producer("H", "C", "A", mass_flow=0.0)
+                    reference = deepcopy(net["A", "B"])
+                    # Both orientations are valid Eulerian walks around this loop.
+                    # Force each one so the test is independent of graph ordering.
+                    flows = np.full(net.n_edges, direction * 1e-16)
+                    context = nullcontext() if vectorized else scalar_fallback()
+                    with context, patch(
+                        "pydhn.solving.thermal_simulation._fill_zero_mass_flow",
+                        return_value=flows,
+                    ):
+                        result = solve_thermal(
+                            net,
+                            Water(),
+                            SOIL,
+                            ts_id=0,
+                            verbose=0,
+                            error_threshold=1e-20,
+                        )
+                    self.assertTrue(result["history"]["thermal converged"])
+                    tank = net["A", "B"]
+                    outlet_node = "B" if direction > 0 else "A"
+                    inlet_node = "A" if direction > 0 else "B"
+                    # Epsilon follows the normal, time-averaged outlet convention.
+                    reference.set("mass_flow", direction * 1e-16)
+                    expected = reference._compute_temperatures(
+                        Water(), SOIL, net[inlet_node]["temperature"], ts_id=0
+                    )[1]
+                    self.assertAlmostEqual(net[outlet_node]["temperature"], expected)
+                    self.assertEqual(tank["outlet_temperature"], expected)
+                    self.assertEqual(tank["mass_flow"], 0.0)
+                    self.assertAlmostEqual(tank["delta_q"], 0.0, delta=1e-9)
+                    np.testing.assert_array_equal(
+                        tank._layer_temperatures, reference._layer_temperatures
+                    )
+
+    def test_invalid_batch_does_not_advance_other_tanks(self):
+        net = build_tanks_net()
+        net.set_edge_attributes(np.full(4, 0.5), "mass_flow")
+        net["A3"]["temperature"] = np.nan
+        before = deepcopy(net)
+        with self.assertRaises(ValueError):
+            compute_storage_temp_net(net, Water(), SOIL, ts_id=0)
+        for edge in net.edges():
+            np.testing.assert_array_equal(
+                net[tuple(edge)]._layer_temperatures,
+                before[tuple(edge)]._layer_temperatures,
+            )
+            self.assertIsNone(net[tuple(edge)]._last_ts)
 
     def test_full_simulation(self):
         # The sandwich network of test_stratified_storage, simulated with

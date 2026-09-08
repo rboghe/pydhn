@@ -225,6 +225,9 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     # ---------------- Parcel displacement (padded 2D arrays) --------------- #
     flow = mdot != 0
     new_vol = np.where(flow, safe_divide(mdot * stepsize, fluid.get_rho(t_in)), 0.0)
+    # Match the scalar roundoff guard without losing the signed port direction.
+    volume_tol = np.finfo(float).eps * internal_volume * counts
+    flow = new_vol > volume_tol
 
     W = counts.max() + 2  # room for the inlet parcel and the split
     vols2 = np.zeros((P, W))

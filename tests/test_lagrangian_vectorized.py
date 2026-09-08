@@ -20,7 +20,9 @@ and overshooting mass flows, exact-fill volumes, and repeated time steps
 
 import unittest
 from contextlib import contextmanager
+from contextlib import nullcontext
 from copy import deepcopy
+from unittest.mock import patch
 
 import numpy as np
 
@@ -93,6 +95,67 @@ def drive(net, fluid, soil, mass_flows, node_temps, ts_ids):
 
 
 class LagrangianVectorEquivalence(unittest.TestCase):
+    def test_idle_ports_follow_solver_direction(self):
+        """Idle pipes use the epsilon direction through either thermal dispatch path."""
+        from pydhn.solving import solve_thermal
+
+        for diameter, length in ((0.02, 10.0), (0.2, 100.0)):
+            for vectorized in (True, False):
+                for direction in (-1, 1):
+                    with self.subTest(
+                        vectorized=vectorized, direction=direction, diameter=diameter
+                    ):
+                        net = Network()
+                        for name in ("A", "B", "C"):
+                            net.add_node(name, temperature=50.0)
+                        net.add_lagrangian_pipe(
+                            "P",
+                            "A",
+                            "B",
+                            mass_flow=0.0,
+                            length=length,
+                            diameter=diameter,
+                            stepsize=10.0,
+                            reynolds=0.0,
+                            friction_factor=0.0,
+                        )
+                        pipe = net["A", "B"]
+                        # A nonuniform idle pipe makes selecting the wrong end visible.
+                        pipe._volumes = np.full(2, pipe._internal_volume / 2)
+                        pipe._temperatures = np.array([80.0, 30.0])
+                        pipe._wall_temperatures = pipe._temperatures.copy()
+                        reference = deepcopy(pipe)
+                        net.add_pipe("R", "B", "C", mass_flow=0.0, length=1.0)
+                        net.add_producer("H", "C", "A", mass_flow=0.0)
+                        flows = np.full(net.n_edges, direction * 1e-16)
+                        context = nullcontext() if vectorized else scalar_fallback()
+                        with context, patch(
+                            "pydhn.solving.thermal_simulation._fill_zero_mass_flow",
+                            return_value=flows,
+                        ):
+                            result = solve_thermal(
+                                net,
+                                ConstantWater(),
+                                Soil(),
+                                ts_id=0,
+                                verbose=0,
+                                error_threshold=1e-20,
+                            )
+                        self.assertTrue(result["history"]["thermal converged"])
+                        inlet, outlet = ("A", "B") if direction > 0 else ("B", "A")
+                        reference.set("mass_flow", direction * 1e-16)
+                        expected = reference._compute_temperatures(
+                            ConstantWater(), Soil(), net[inlet]["temperature"], ts_id=0
+                        )[1]
+                        self.assertAlmostEqual(net[outlet]["temperature"], expected)
+                        self.assertAlmostEqual(pipe["outlet_temperature"], expected)
+                        self.assertAlmostEqual(
+                            sum(pipe._volumes), pipe._internal_volume
+                        )
+                        np.testing.assert_array_equal(
+                            net.get_edges_attribute_array("mass_flow"), np.zeros(3)
+                        )
+
     def assert_equivalent(self, net, fluid, soil, mass_flows, node_temps, ts_ids):
         net_v, net_s = deepcopy(net), deepcopy(net)
         rec_v = drive(net_v, fluid, soil, mass_flows, node_temps, ts_ids)

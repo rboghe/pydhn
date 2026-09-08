@@ -168,7 +168,8 @@ def solve_thermal(
     soil : Soil
         Soil object to be used in the simulation.
     error_threshold : float, optional
-        Error threshold for the solver in Wh. The default is 1e-6.
+        Maximum absolute node residual, measured as mass flow times
+        temperature (kg·K/s). The default is 1e-6.
     max_iters : int, optional
         Maximum number of iterations for the solver. The default is 100.
     damping_factor : float, optional
@@ -177,28 +178,62 @@ def solve_thermal(
         Whether to reduce the damping factor at each Newton iteration. The
         default is False.
     adaptive : bool, optional
-        Whether to reduce the damping factor on plateau. The default is True.
+        Whether to reduce the damping factor on plateau. The default is False.
     verbose : int, optional
         Controls the verbosity of the simulation. The default is 1.
     mass_flow_min : float, optional
         Mass flow (kg/s) used to approximate 0. The default is 1e-16.
+        Signed replacements are temporarily exposed as edge attributes during
+        component thermal evaluation. Original flows are restored afterward,
+        including on exceptions. Components use their normal flowing behaviour,
+        with negligible artificial advection at the default magnitude.
     ts_id : int, optional
-        Specifies the ID of the current time-step. The default is None.
-    **kwargs
-        Arbitrary keyword arguments.
+        Specifies the ID of the current time-step. When omitted, advances
+        to the next ID on this network (starting at zero). All Newton
+        iterations share that ID so dynamic components advance only once.
+        Omitting the ID emits a warning: each call starts a new timestep,
+        even when retrying a failed solve. Pass the same explicit ID for
+        repeated solves within one timestep, and align IDs with any
+        time-dependent inputs.
+    **kwargs : dict
+        Additional simulation arguments, accepted for compatibility with
+        simulation loops. They are not used by this solver.
 
     Returns
     -------
-    dict
-        Dictionary with the simulation results.
+    results : Results
+        Dictionary-like simulation results. ``history`` contains the
+        convergence flag, final iteration index and node residual history.
+        ``nodes`` contains temperature arrays of shape (1, net.n_nodes).
+        ``edges`` contains temperature, inlet and outlet temperature,
+        ``delta_t`` and ``delta_q`` arrays of shape (1, net.n_edges).
+        Temperatures and temperature differences are in °C and K,
+        respectively; ``delta_q`` uses each component's heat-exchange units.
+        Node and edge labels are stored under their respective ``columns``
+        keys. The network attributes and dynamic states are updated in place.
 
     """
+    # Explicit IDs also anchor subsequent automatically numbered steps.
+    if ts_id is None:
+        # A new call may be a retry; automatic numbering cannot distinguish it.
+        warn(
+            "No ts_id supplied: this call is treated as a new timestep. "
+            "Pass an explicit timestep ID when retrying a solve or performing "
+            "multiple solves within one timestep, and align it with any "
+            "time-dependent inputs.",
+            stacklevel=2,
+        )
+        ts_id = getattr(net, "_thermal_ts", -1) + 1
+    net._thermal_ts = ts_id
+
     # Get mass flow and temperatures
     edges, mass_flow = net.edges("mass_flow")
     nodes, t_nodes = net.nodes("temperature")
+    zero_flow_mask = np.flatnonzero(mass_flow == 0)
+    original_zero_flows = mass_flow[zero_flow_mask].copy()
 
     # Find direction of zero mass flow elements
-    if np.any(mass_flow == 0):
+    if len(zero_flow_mask):
         mass_flow = _fill_zero_mass_flow(
             net=net,
             edges=edges,
@@ -226,11 +261,22 @@ def solve_thermal(
         # Set new temperatures
         net.set_node_attributes(t_nodes, "temperature")
 
-        # Is it a repetition?
-        # Compute temperature in edges
-        t_in, t_out, t_avg, t_out_der, delta_q = compute_edge_temperatures(
-            net, fluid, soil, set_values=True, ts_id=ts_id
-        )
+        # Components must see the same flow direction as the node balance.
+        # Expose epsilon flows only during thermal evaluation; finally restores
+        # hydraulic zeros before convergence checks, even on errors or Ctrl+C.
+        try:
+            if len(zero_flow_mask):
+                net.set_edge_attributes(
+                    mass_flow[zero_flow_mask], "mass_flow", mask=zero_flow_mask
+                )
+            t_in, t_out, t_avg, t_out_der, delta_q = compute_edge_temperatures(
+                net, fluid, soil, set_values=True, ts_id=ts_id
+            )
+        finally:
+            if len(zero_flow_mask):
+                net.set_edge_attributes(
+                    original_zero_flows, "mass_flow", mask=zero_flow_mask
+                )
 
         jac = np.zeros((dim, dim))
         for n, (i, j) in enumerate(zip(rows, columns)):

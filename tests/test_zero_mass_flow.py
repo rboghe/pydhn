@@ -16,12 +16,14 @@ that there are never zero-flow nodes with only outgoing flows.
 """
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
 from pydhn import ConstantWater, Network, Soil
 from pydhn.networks import star_network
 from pydhn.solving import solve_hydraulics, solve_thermal
+from pydhn.solving.temperature import compute_edge_temperatures
 from pydhn.solving.thermal_simulation import _fill_zero_mass_flow
 
 # Use a value different than the default one
@@ -392,11 +394,7 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
         mass_flow = net.get_edges_attribute_array("mass_flow")
 
         # Check that the intended branch is actually idle.
-        idle_names = {
-            name
-            for name, flow in zip(names, mass_flow)
-            if flow == 0.0
-        }
+        idle_names = {name for name, flow in zip(names, mass_flow) if flow == 0.0}
         self.assertSetEqual(idle_names, {"SP6", "SUB1", "RP6"})
 
         # Exercise the fill directly as well.
@@ -405,17 +403,62 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
         # Every zero must become a signed epsilon.
         self.assert_only_zero_flows_are_replaced(mass_flow, filled)
 
-        # The thermal solve must handle the idle branch.
-        results = solve_thermal(
-            net,
-            ConstantWater(),
-            Soil(),
-            error_threshold=1e-13,
-            verbose=0,
+        def evaluate(*args, **kwargs):
+            # Scalar and vector components read the same flows as the node balance.
+            np.testing.assert_array_equal(
+                net.get_edges_attribute_array("mass_flow"), filled
+            )
+            return compute_edge_temperatures(*args, **kwargs)
+
+        # The temporary values are visible during evaluation, then restored.
+        with patch(
+            "pydhn.solving.thermal_simulation.compute_edge_temperatures",
+            side_effect=evaluate,
+        ) as mocked:
+            results = solve_thermal(
+                net,
+                ConstantWater(),
+                Soil(),
+                mass_flow_min=MASS_FLOW_MIN,
+                error_threshold=1e-13,
+                verbose=0,
+            )
+        self.assertGreater(mocked.call_count, 0)
+        np.testing.assert_array_equal(
+            net.get_edges_attribute_array("mass_flow"), mass_flow
         )
 
         # The end-to-end thermal solve must converge.
         self.assertTrue(results["history"]["thermal converged"])
+
+    def test_thermal_failure_restores_mass_flows(self):
+        """An exception or Ctrl+C must not leave epsilon flows on network edges."""
+        for error in (RuntimeError, KeyboardInterrupt):
+            with self.subTest(error=error.__name__):
+                net = _idle_consumer_network()
+                original = net.get_edges_attribute_array("mass_flow").copy()
+                filled = _fill(net, original)
+
+                def fail(*args, **kwargs):
+                    np.testing.assert_array_equal(
+                        net.get_edges_attribute_array("mass_flow"), filled
+                    )
+                    raise error("Interrupted thermal evaluation")
+
+                with patch(
+                    "pydhn.solving.thermal_simulation.compute_edge_temperatures",
+                    side_effect=fail,
+                ), self.assertRaisesRegex(error, "Interrupted thermal evaluation"):
+                    solve_thermal(
+                        net,
+                        ConstantWater(),
+                        Soil(),
+                        mass_flow_min=MASS_FLOW_MIN,
+                        verbose=0,
+                    )
+                np.testing.assert_array_equal(
+                    net.get_edges_attribute_array("mass_flow"), original
+                )
 
 
 if __name__ == "__main__":

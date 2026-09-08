@@ -24,6 +24,50 @@ def compute_edge_temperatures(
     """
     Computes the inlet, outlet and average temperature in each component, as
     well as the derivative dT_out/dT_in.
+
+    Parameters
+    ----------
+    net : Network
+        Network with component mass flows and node temperatures already set.
+    fluid : Fluid
+        Working fluid used to evaluate component thermophysical properties.
+    soil : Soil
+        Soil model used by components that exchange heat with the ground.
+    set_values : bool, optional
+        Whether to write inlet, outlet and average temperatures and
+        ``delta_q`` to the selected edge attributes. The default is False.
+        Dynamic components update their internal states in either case.
+    mask : numpy.ndarray of int, optional
+        Unique edge indices to evaluate. The default is None, which selects
+        all edges. Unselected components and their attributes are unchanged.
+    ts_id : int, optional
+        Timestep identifier forwarded to component models. Dynamic storage
+        components restore their initial state when a non-None ID is repeated.
+        The default is None; this function does not generate timestep IDs.
+
+    Returns
+    -------
+    t_in : numpy.ndarray
+        Upstream node temperatures (°C), shape (net.n_edges,). Values are
+        provided for every edge, including edges outside ``mask``.
+    t_out : numpy.ndarray
+        Component outlet temperatures (°C), shape (net.n_edges,). Dynamic
+        models may return averages over the timestep.
+    t_avg : numpy.ndarray
+        Component average temperatures (°C), shape (net.n_edges,). For storage
+        tanks, these are spatial averages at the end of the timestep.
+    t_out_der : numpy.ndarray
+        Dimensionless outlet derivatives dT_out/dT_in, shape (net.n_edges,).
+    delta_q : numpy.ndarray
+        Component-reported heat exchange, shape (net.n_edges,). Storage tanks,
+        Lagrangian pipes and heat exchangers report Wh per step; steady-state
+        pipes report W. The physical meaning follows the component model.
+
+    Notes
+    -----
+    Returned arrays use the full network edge order. Entries outside ``mask``
+    are zero in all outputs except ``t_in``. Evaluating temperatures can
+    advance dynamic component states even when ``set_values`` is False.
     """
     # If a mask is not specified, all edges are considered
     if mask is None:
@@ -45,13 +89,15 @@ def compute_edge_temperatures(
         component_mask = net.mask(
             attr="component_type", value=component, condition="equality"
         )
+        component_count = len(component_mask)
         component_mask = np.intersect1d(mask, component_mask, assume_unique=True)
         # If a vector function is specified for the component, use it
         has_vector = False
         if COMPONENT_FUNCTIONS_DICT[component] is not None:
             if "temperatures" in COMPONENT_FUNCTIONS_DICT[component].keys():
                 has_vector = True
-        if has_vector:
+        # Whole-network vector functions cannot safely update a partial mask.
+        if has_vector and len(component_mask) == component_count:
             foo = COMPONENT_FUNCTIONS_DICT[component]["temperatures"]
             outs = foo(net=net, fluid=fluid, soil=soil, ts_id=ts_id)
             t_in[component_mask] = outs[0]
@@ -87,9 +133,9 @@ def compute_edge_temperatures(
     t_in = np.where(mass_flow_orig >= 0, t_0, t_1)
 
     if set_values:
-        net.set_edge_attributes(t_in, "inlet_temperature")
-        net.set_edge_attributes(t_out, "outlet_temperature")
-        net.set_edge_attributes(t_avg, "temperature")
-        net.set_edge_attributes(delta_q, "delta_q")
+        net.set_edge_attributes(t_in[mask], "inlet_temperature", mask=mask)
+        net.set_edge_attributes(t_out[mask], "outlet_temperature", mask=mask)
+        net.set_edge_attributes(t_avg[mask], "temperature", mask=mask)
+        net.set_edge_attributes(delta_q[mask], "delta_q", mask=mask)
 
     return t_in, t_out, t_avg, t_out_der, delta_q

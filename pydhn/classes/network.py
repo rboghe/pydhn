@@ -826,7 +826,7 @@ class Network(AbstractNetwork):
         """
         Adds a leaf component of type "stratified_storage" to the directed
         graph of the network. It is a dynamic thermal storage tank based on
-        the one-dimensional multi-node model studied in [1], the same family 
+        the one-dimensional multi-node model studied in [1]_, the same family
         of models as TRNSYS Type 4.
 
         The start node connects to the top of the tank and the end node to
@@ -866,7 +866,9 @@ class Network(AbstractNetwork):
         stepsize : float, optional
             Size of the time step in seconds. The default is 3600.
         **kwargs : dict
-            Additional keyword arguments.
+            Additional storage arguments, including ``temperature`` for a
+            uniform initial temperature or ``initial_layer_temperatures``
+            for a profile ordered from top to bottom.
 
         Returns
         -------
