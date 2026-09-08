@@ -826,8 +826,8 @@ class Network(AbstractNetwork):
         """
         Adds a leaf component of type "stratified_storage" to the directed
         graph of the network. It is a dynamic thermal storage tank based on
-        the one-dimensional multi-node ("multinode") model studied in [1]_,
-        the same family of models as TRNSYS Type 4.
+        the one-dimensional multi-node model studied in [1], the same family 
+        of models as TRNSYS Type 4.
 
         The start node connects to the top of the tank and the end node to
         its bottom. The mass flow is imposed through setpoint_value_hyd: a

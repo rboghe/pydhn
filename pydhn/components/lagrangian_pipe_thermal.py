@@ -11,12 +11,10 @@
 """
 Vectorized thermal model for LagrangianPipe components.
 
-Computes one thermal step for *all* lagrangian pipes of a network at once,
-replicating pipe-by-pipe ``LagrangianPipe._compute_temperatures``. The ragged
+Computes one thermal step for all lagrangian pipes of a network at once,
+replicating pipe-by-pipe `LagrangianPipe._compute_temperatures`. The ragged
 per-pipe parcel state is packed into flat (CSR-like) arrays for the physics
-and into zero-padded 2D arrays for the parcel displacement, so that per-pipe
-cumulative sums and threshold checks are bitwise identical to the scalar
-model. The pipe objects remain the owners of the state.
+and into zero-padded 2D arrays for the parcel displacement. 
 """
 
 import numpy as np

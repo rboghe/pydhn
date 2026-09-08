@@ -28,12 +28,21 @@ if TYPE_CHECKING:
 
 
 def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
-    """
-    The function solve_thermal() ignores all edges where the mass flow is zero.
-    In order to avoid this, these values need to be temporarly replaced with a
-    very low mass flow. The sign of the new mass flow must be such that, if the
-    edges of the network graph are assigned the direction in which the mass
-    flow is positive, no nodes have only incoming or outgoing edges.
+    """Replace zero flows with signed epsilon flows for `solve_thermal`.
+
+    The thermal solver excludes edges whose mass flow is exactly zero. Each
+    zero is therefore replaced by `+/- mass_flow_min`. The signs orient the
+    zero-flow subgraph along Eulerian walks: whenever the walk enters a node on
+    a real zero-flow edge, it also leaves it on another one. This avoids
+    creating an artificial source or sink inside an idle subgraph.
+
+    A zero-flow component with only even-degree nodes has an Eulerian circuit
+    directly. For odd-degree nodes, a temporary `eulerian_node` is joined
+    to every odd node, making every degree even and allowing a circuit to be
+    found.  Removing the temporary edges turns that circuit into open paths
+    whose endpoints are the original odd-degree nodes. Consequently, the
+    epsilon perturbation is exactly mass-conserving only for closed zero-flow
+    components; open paths require compatible live flow at their endpoints.
 
 
     Parameters
@@ -44,8 +53,8 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
         Array of edges in the network. Since it is needed in solve_thermal(),
         not recomputing it saves some time.
     nodes : Array
-        Array of nodes in the network. Since it is needed in solve_thermal(),
-        not recomputing it saves some time.
+        Array of nodes in the network. It is currently unused here but is kept
+        for the data flow shared with solve_thermal().
     mass_flow : Array
         Array of mass flow values. Since it is needed in solve_thermal(),
         not recomputing it saves some time.
@@ -56,28 +65,44 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
     Returns
     -------
     mass_flow : Array
-        Array of mass flow values where all the 0s are converted to a value
-        equal to mass_flow_min times either 1 or -1, in a way that no
-        converging or diverging nodes are created.
+        Array where every zero is replaced by mass_flow_min with a sign chosen
+        from an Eulerian walk. Closed zero-flow components remain balanced;
+        odd-degree components become open epsilon paths.
 
     """
-    # Find direction of zero mass flow elements such that
     G = net._graph
 
+    # Only exact zeros may be changed. Work on their undirected topology: the
+    # stored edge direction is considered only after the Eulerian walk is made.
     zero_mdot_list = list(map(tuple, edges[np.where(mass_flow == 0.0)[0]]))
     S = G.edge_subgraph(zero_mdot_list).copy().to_undirected()
+
+    # An Eulerian circuit exists when every node has even degree. Such a walk
+    # pairs every arrival at a node with a departure, which gives the desired
+    # signs for the real zero-flow edges.
     degrees = np.array(S.degree())
     indices = np.where(degrees[:, 1].astype(float) % 2 != 0)[0]
     if len(indices) != 0:
+        # The number of odd-degree nodes is always even. Connecting a temporary
+        # nonphysical Eulerian node to each one adds one edge at that node,
+        # making all degrees even. It also joins otherwise disconnected open
+        # components through the temporary node, so one circuit visits them all.
         new_node = "eulerian_node"
         new_edges = [("eulerian_node", n) for n in degrees[indices, 0]]
         S.add_edges_from(new_edges)
     else:
-        # All nodes already have even degree: start from any node of S
+        # The real zero-flow graph is already Eulerian; any node is a valid
+        # starting point for a closed circuit.
         new_node = next(iter(S.nodes()))
+
+    # Orient every real zero edge in the direction in which the Eulerian walk
+    # traverses it. Temporary edges only close open paths and are discarded.
     for u, v in nx.eulerian_circuit(S, source=new_node):
         if "eulerian_node" in [u, v]:
             continue
+
+        # The network stores an edge in exactly one direction. A traversal that
+        # matches it gets positive flow; a reverse traversal gets negative flow.
         pos_arr = np.where((edges == (u, v)).all(axis=1))[0]
         neg_arr = np.where((edges == (v, u)).all(axis=1))[0]
         assert len(pos_arr) + len(neg_arr) == 1
@@ -87,6 +112,8 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
             mass_flow[neg_arr[0]] = mass_flow_min * -1
         else:
             raise ValueError("Repeated edge found.")
+
+    # solve_thermal can now include every edge in its thermal balance.
     assert np.isin(0, mass_flow) == False
     return mass_flow
 
