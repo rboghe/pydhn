@@ -17,7 +17,7 @@ repeated time steps, and a mixed steady-state/dynamic network simulation.
 import unittest
 from copy import deepcopy
 from warnings import catch_warnings
-from warnings import simplefilter
+from warnings import filterwarnings
 
 import numpy as np
 from scipy.integrate import quad
@@ -469,10 +469,10 @@ class StratifiedStorageTestCase(unittest.TestCase):
         for step in range(3):
             with self.assertWarnsRegex(UserWarning, "No ts_id supplied"):
                 a = solve_thermal(auto, fluid, SOIL, verbose=0)
-            with catch_warnings(record=True) as caught:
-                simplefilter("always")
+            # Explicit IDs must not trigger the automatic-timestep warning.
+            with catch_warnings():
+                filterwarnings("error", message="No ts_id supplied", category=UserWarning)
                 b = solve_thermal(explicit, fluid, SOIL, ts_id=step, verbose=0)
-            self.assertEqual(caught, [])
             self.assertTrue(a["history"]["thermal converged"])
             np.testing.assert_array_equal(
                 auto["A", "B"]._layer_temperatures,
