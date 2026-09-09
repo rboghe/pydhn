@@ -88,14 +88,16 @@ class Component:
         self._type = "base_component"
         self._is_ideal = True
 
-        # Legacy custom components that override _run_control_logic without
-        # declaring _controlled_keys keep the behavior of running it on every
-        # lookup
-        if (
-            type(self)._run_control_logic is not Component._run_control_logic
-            and not self._controlled_keys
-        ):
-            self._controlled_keys = _ALL_KEYS
+        # Resolve the nearest control override or key declaration. An override
+        # without declared keys must not inherit a parent's restricted dispatch.
+        for cls in type(self).__mro__:
+            if "_controlled_keys" in cls.__dict__ or "_run_control_logic" in cls.__dict__:
+                if (
+                    type(self)._run_control_logic is not Component._run_control_logic
+                    and not cls.__dict__.get("_controlled_keys")
+                ):
+                    self._controlled_keys = _ALL_KEYS
+                break
 
         # Initialize the component
         self._initialized = False
