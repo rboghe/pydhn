@@ -100,6 +100,17 @@ More complex logic can also be implemented by modifying the method :meth:`~pydhn
     >>> print(my_comp._attrs['test_value'])
     5
 
+If the control logic only handles some attributes, they can be listed in the
+class attribute ``_controlled_keys``, so that looking up the other attributes
+does not call
+:meth:`~pydhn.components.abstract_component.Component._run_control_logic`::
+
+    class MyComp(Component):
+        _controlled_keys = frozenset({"test_value"})
+
+If ``_controlled_keys`` is not declared, the control logic is called for every
+attribute.
+
 
 Finally, for each component two private methods defining the functioning during simulations need to be implemented: :meth:`~pydhn.components.abstract_component.Component._compute_delta_p` and :meth:`~pydhn.components.abstract_component.Component._compute_temperatures`.
 
@@ -401,7 +412,7 @@ The Lagrangian Pipe implements the same hydraulics of the :class:`~pydhn.compone
 Thermal
 """"""""""""
 
-The equations used for the thermal simulation in the :class:`~pydhn.components.lagrangian_pipe.LagrangianPipe` class are described in detail in [DeAl19]_. The outlet temperature is computed as the weighted average between the volumes exiting the pipe. If the mass flow is zero, the outlet temperature is the temperature at the outlet section of the pipe. Currently, the function used to compute the temperatures is not vectorized, so the simulation loop will call the method :meth:`~pydhn.components.lagrangian_pipe.LagrangianPipe._compute_temperatures` for each element of this tipe separately using a for loop.
+The equations used for the thermal simulation in the :class:`~pydhn.components.lagrangian_pipe.LagrangianPipe` class are described in detail in [DeAl19]_. The outlet temperature is computed as the weighted average between the volumes exiting the pipe. If the mass flow is zero, the outlet temperature is the temperature at the outlet section of the pipe. The simulation loop uses the vectorized function :func:`~pydhn.components.lagrangian_pipe_thermal.compute_lagrangian_temp_net`, which computes all the Lagrangian pipes of the network at once and gives the same results as the method :meth:`~pydhn.components.lagrangian_pipe.LagrangianPipe._compute_temperatures`.
 
 
 .. note::
@@ -414,7 +425,7 @@ The component keeps an internal memory of the moving volumes of fluid and their 
 	>>> from pydhn.components import LagrangianPipe
 	>>> from pydhn import ConstantWater
 	>>> from pydhn import Soil
-	>>> comp = LagrangianPipe(length=100)
+	>>> comp = LagrangianPipe(length=100, stepsize=5)
 	>>> fluid = ConstantWater()
 	>>> soil = Soil()
 	>>> # Print list of internal volumes
@@ -706,6 +717,155 @@ The :class:`~pydhn.components.base_consumer.Consumer` class implements the same 
 
 .. note::
 	:class:`~pydhn.components.base_consumer.Consumer` has the additional argument :attr:`heat_demand`, but this is only used to compute the mass flow setpoint in case :attr:`control_type` is set to ``'energy'``: it has no influence on the thermal simulation.
+
+Stratified Storage
+-------------------
+
+.. list-table::
+   :widths: 25 25 25
+   :header-rows: 1
+
+   * - Component type
+     - Component class
+     - Is ideal
+   * - stratified_storage
+     - leaf_component
+     - True
+
+:class:`~pydhn.components.stratified_storage.StratifiedStorage` implements the
+one-dimensional multi-node storage tank model studied in [Klei93]_. The tank is
+a vertical cylinder divided into :math:`N` layers of equal volume, each with a
+uniform temperature. The start node of the edge is connected to the top of the
+tank and the end node to its bottom. It has the following main attributes:
+
+.. list-table::
+    :widths: 20 20 20 20 20
+    :header-rows: 1
+
+    * - Input
+      - Symbol
+      - Documentation
+      - Default
+      - Unit
+    * - volume
+      - :math:`V`
+      - :const:`~pydhn.default_values.default_values.STORAGE_VOLUME`
+      - .. autovalue:: pydhn.default_values.default_values.STORAGE_VOLUME
+      - :math:`m^3`
+    * - height
+      - :math:`H`
+      - :const:`~pydhn.default_values.default_values.STORAGE_HEIGHT`
+      - .. autovalue:: pydhn.default_values.default_values.STORAGE_HEIGHT
+      - :math:`m`
+    * - n_layers
+      - :math:`N`
+      - :const:`~pydhn.default_values.default_values.STORAGE_N_LAYERS`
+      - .. autovalue:: pydhn.default_values.default_values.STORAGE_N_LAYERS
+      - :math:`-`
+    * - u_value
+      - :math:`U`
+      - :const:`~pydhn.default_values.default_values.STORAGE_U_VALUE`
+      - .. autovalue:: pydhn.default_values.default_values.STORAGE_U_VALUE
+      - :math:`W/(m^2·K)`
+    * - delta_k
+      - :math:`\Delta k`
+      - :const:`~pydhn.default_values.default_values.STORAGE_DELTA_K`
+      - .. autovalue:: pydhn.default_values.default_values.STORAGE_DELTA_K
+      - :math:`W/(m·K)`
+    * - t_ambient
+      - :math:`\theta_{amb}`
+      - :const:`~pydhn.default_values.default_values.T_AMBIENT`
+      - .. autovalue:: pydhn.default_values.default_values.T_AMBIENT
+      - :math:`°C`
+    * - setpoint_value_hyd
+      - :math:`\dot m_{set}`
+      - :const:`~pydhn.default_values.default_values.SETPOINT_VALUE_HYD_STORAGE`
+      - .. autovalue:: pydhn.default_values.default_values.SETPOINT_VALUE_HYD_STORAGE
+      - :math:`kg/s`
+    * - stepsize
+      - :math:`\Delta s`
+      - :const:`~pydhn.default_values.default_values.STEPSIZE`
+      - .. autovalue:: pydhn.default_values.default_values.STEPSIZE
+      - :math:`s`
+
+Hydraulics
+""""""""""""
+
+The stratified storage is an ideal component with an imposed mass flow, which
+works like the ``'mass_flow'`` mode of the
+:class:`~pydhn.components.base_producer.Producer` class described
+:ref:`here <BaseProdHyd>`. A positive mass flow enters the top of the tank from
+the start node and leaves its bottom to the end node: if the top is connected to
+the supply line, this charges the tank. A negative mass flow goes in the
+opposite direction and discharges the tank.
+
+Thermal
+""""""""""""
+
+Each layer :math:`i`, numbered from the top, exchanges heat with its neighbours
+through advection and conduction, and with the ambient through the envelope of
+the tank:
+
+.. math::
+
+	\begin{equation}\label{storage_layer}
+	\rho V_l c_p \frac{d\theta_i}{dt} = UA_i \left(\theta_{amb} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i-1} - \theta_i\right) + \frac{k_{eff} A_c}{\Delta z} \left(\theta_{i+1} - \theta_i\right) + |\dot m| c_p \left(\theta_{up(i)} - \theta_i\right)
+	\end{equation}
+
+where :math:`V_l = V/N` is the layer volume, :math:`A_c = V/H` the
+cross-sectional area and :math:`\Delta z = H/N` the layer height. The thermal
+conductivity between layers is :math:`k_{eff} = k_f + \Delta k`, where
+:math:`\Delta k` can account for other heat transfer between layers, for
+example through the tank wall. :math:`UA_i` is computed from the U-value and the
+lateral surface of the layer, plus the ends of the tank for the top and bottom
+layers. :math:`\theta_{up(i)}` is the temperature of the layer from which water
+arrives, or the inlet temperature for the first layer in the flow direction.
+
+The equations are integrated with the third-order strong stability preserving
+Runge-Kutta method (SSPRK3), dividing the time step into substeps of at most 0.1
+times the shortest time constant of the layers. If a layer is warmer than the
+one above, the two are mixed to their mean temperature, and more layers are
+included until no inversion is left. Mixing is applied to the initial profile
+and after each stage of the Runge-Kutta method. Fluid properties are evaluated
+at the mean tank temperature at the beginning of each time step: with
+temperature-dependent properties, energy is conserved within each time step but
+not exactly across them. :class:`~pydhn.fluids.fluids.ConstantWater` avoids
+this approximation.
+
+The outlet temperature is the average temperature of the water leaving the tank
+during the time step, so that the heat exchanged with the network is consistent
+with the change of stored energy and the losses. The average temperature is
+instead the mean temperature of the layers at the end of the time step. If the
+mass flow is zero, the inlet and outlet temperatures are those of the top and
+bottom layers. During network simulations, however, the thermal solver gives
+idle dynamic components a very small mass flow, so that their outlet
+temperature is computed at the end chosen by the solver.
+
+The simulation loop uses the vectorized function
+:func:`~pydhn.components.stratified_storage_thermal.compute_storage_temp_net`,
+which computes all the tanks of the network at once. The component keeps an
+internal memory of the layer temperatures:
+
+.. doctest::
+
+	>>> from pydhn.components import StratifiedStorage
+	>>> from pydhn import ConstantWater
+	>>> from pydhn import Soil
+	>>> comp = StratifiedStorage(volume=1.0, height=1.0, n_layers=5,
+	...                          u_value=0.0, stepsize=600)
+	>>> fluid = ConstantWater()
+	>>> soil = Soil()
+	>>> # Print the layer temperatures, from top to bottom
+	>>> print(comp._layer_temperatures)
+	[50. 50. 50. 50. 50.]
+	>>> # Charge the tank with 0.1 kg/s of hot water
+	>>> comp.set("mass_flow", 0.1)
+	>>> # Simulate one time-step with inlet temperature of 70°C
+	>>> _ = comp._compute_temperatures(fluid=fluid, soil=soil, t_in=70, ts_id=0)
+	>>> # The hot water entered the top of the tank
+	>>> print(comp._layer_temperatures.round(3))
+	[55.224 50.756 50.075 50.006 50.   ]
+
 
 Branch Valve
 -----------------
