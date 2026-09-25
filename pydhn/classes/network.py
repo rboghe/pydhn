@@ -621,8 +621,8 @@ class Network(AbstractNetwork):
 
         # Compute delta z
         try:
-            start_z = nx.get_node_attributes(self._graph, "z")[start_node]
-            end_z = nx.get_node_attributes(self._graph, "z")[end_node]
+            start_z = self._graph.nodes[start_node]["z"]
+            end_z = self._graph.nodes[end_node]["z"]
             delta_z = end_z - start_z
         except Exception:
             delta_z = 0.0
@@ -763,8 +763,8 @@ class Network(AbstractNetwork):
 
         # Compute delta z
         try:
-            start_z = nx.get_node_attributes(self._graph, "z")[start_node]
-            end_z = nx.get_node_attributes(self._graph, "z")[end_node]
+            start_z = self._graph.nodes[start_node]["z"]
+            end_z = self._graph.nodes[end_node]["z"]
             delta_z = end_z - start_z
         except Exception:
             delta_z = 0.0
@@ -1303,8 +1303,8 @@ class Network(AbstractNetwork):
 
         # Compute delta z
         try:
-            start_z = nx.get_node_attributes(self._graph, "z")[start_node]
-            end_z = nx.get_node_attributes(self._graph, "z")[end_node]
+            start_z = self._graph.nodes[start_node]["z"]
+            end_z = self._graph.nodes[end_node]["z"]
             delta_z = end_z - start_z
         except Exception:
             delta_z = 0.0
