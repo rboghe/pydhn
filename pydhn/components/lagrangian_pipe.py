@@ -284,7 +284,10 @@ class LagrangianPipe(Pipe):
 
         mk1, mk2 = vector_b
 
+        # The eigenvalues of this system are always real, but np.linalg.eig
+        # can return them as complex numbers with a null imaginary part
         eigenvalues, eigenvectors = np.linalg.eig(matrix_A)
+        eigenvalues, eigenvectors = eigenvalues.real, eigenvectors.real
 
         V0, V1 = eigenvectors[:, 0, 0], eigenvectors[:, 1, 0]
         W0, W1 = eigenvectors[:, 0, 1], eigenvectors[:, 1, 1]
@@ -497,9 +500,11 @@ class LagrangianPipe(Pipe):
                 leaving_volumes * leaving_temperatures
             ).sum() / leaving_volumes.sum()
 
-            # Update wall discretization to match that of volumes
+            # Update wall discretization to match that of volumes. For
+            # negative mass flows, the old volumes must be reversed as well.
             cumsum = np.cumsum(staying_volumes)
-            last_cumsum = np.cumsum(self._last_volumes)
+            last_volumes = self._last_volumes[::-1] if REVERSED else self._last_volumes
+            last_cumsum = np.cumsum(last_volumes)
             old_wall_temps = new_wall_temps.copy()
             new_wall_temps = np.interp(cumsum, last_cumsum, old_wall_temps)
         else:
