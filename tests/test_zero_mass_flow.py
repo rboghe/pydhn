@@ -30,9 +30,6 @@ from pydhn.solving.thermal_simulation import _fill_zero_mass_flow
 # Use a value different than the default one
 MASS_FLOW_MIN = 3e-12
 
-# Loop A -> B -> D -> A carrying a unit mass flow
-ACTIVE_LOOP = [("AB", "A", "B", 1.0), ("BD", "B", "D", 1.0), ("DA", "D", "A", 1.0)]
-
 
 def network_with_flows(edge_specs):
     """Builds a network of pipes from (name, start, end, mass_flow) tuples."""
@@ -128,8 +125,14 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
                └─────> Y ─────> X ────────┘
         """
         net, mass_flow = network_with_flows(
-            ACTIVE_LOOP
-            + [("DY", "D", "Y", 0.0), ("YX", "Y", "X", 0.0), ("XB", "X", "B", 0.0)]
+            [
+                ("AB", "A", "B", 1.0),
+                ("BD", "B", "D", 1.0),
+                ("DA", "D", "A", 1.0),
+                ("DY", "D", "Y", 0.0),
+                ("YX", "Y", "X", 0.0),
+                ("XB", "X", "B", 0.0),
+            ]
         )
         filled = fill(net, mass_flow)
         self.check_fill(mass_flow, filled)
@@ -152,8 +155,10 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
                X5 <─── X4 <─── X3 ───> X2 ───> X1
         """
         net, mass_flow = network_with_flows(
-            ACTIVE_LOOP
-            + [
+            [
+                ("AB", "A", "B", 1.0),
+                ("BD", "B", "D", 1.0),
+                ("DA", "D", "A", 1.0),
                 ("X1_B", "X1", "B", 0.0),
                 ("X2_X1", "X2", "X1", 0.0),
                 ("X3_X2", "X3", "X2", 0.0),
