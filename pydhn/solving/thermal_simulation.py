@@ -27,14 +27,18 @@ if TYPE_CHECKING:
     from pydhn import Soil
 
 
-def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
+def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
     """
     The function solve_thermal() ignores all edges where the mass flow is zero.
-    In order to avoid this, these values need to be temporarly replaced with a
+    In order to avoid this, these values need to be temporarily replaced with a
     very low mass flow. The sign of the new mass flow must be such that, if the
     edges of the network graph are assigned the direction in which the mass
     flow is positive, no nodes have only incoming or outgoing edges.
 
+    The signs follow an Eulerian circuit of the zero flow edges: every time
+    the circuit enters a node, it also leaves it. Nodes with an odd number of
+    zero flow edges are first connected to a temporary node, so that a
+    circuit always exists. They become the ends of open paths.
 
     Parameters
     ----------
@@ -42,9 +46,6 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
         Network object.
     edges : Array
         Array of edges in the network. Since it is needed in solve_thermal(),
-        not recomputing it saves some time.
-    nodes : Array
-        Array of nodes in the network. Since it is needed in solve_thermal(),
         not recomputing it saves some time.
     mass_flow : Array
         Array of mass flow values. Since it is needed in solve_thermal(),
@@ -73,7 +74,8 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
         new_edges = [("eulerian_node", n) for n in degrees[indices, 0]]
         S.add_edges_from(new_edges)
     else:
-        new_node = edges[0]
+        # All degrees are even: the circuit can start from any node
+        new_node = next(iter(S.nodes()))
     for u, v in nx.eulerian_circuit(S, source=new_node):
         if "eulerian_node" in [u, v]:
             continue
@@ -86,7 +88,7 @@ def _fill_zero_mass_flow(net, edges, nodes, mass_flow, mass_flow_min=1e-16):
             mass_flow[neg_arr[0]] = mass_flow_min * -1
         else:
             raise ValueError("Repeated edge found.")
-    assert np.isin(0, mass_flow) == False
+    assert not np.isin(0, mass_flow)
     return mass_flow
 
 
@@ -174,7 +176,6 @@ def solve_thermal(
         mass_flow = _fill_zero_mass_flow(
             net=net,
             edges=edges,
-            nodes=nodes,
             mass_flow=mass_flow,
             mass_flow_min=mass_flow_min,
         )
