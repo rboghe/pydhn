@@ -16,6 +16,8 @@ from warnings import warn
 
 import networkx as nx
 import numpy as np
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
 
 from pydhn.classes import Results
 from pydhn.solving.temperature import compute_edge_temperatures
@@ -235,18 +237,10 @@ def solve_thermal(
             zeros = np.zeros_like(idle_mass_flow)
             net.set_edge_attributes(zeros, "mass_flow", mask=idle_dynamic)
 
-        jac = np.zeros((dim, dim))
-        for n, (i, j) in enumerate(zip(rows, columns)):
-            jac[i][j] = t_out_der[edge_mask][n] * np.abs(mass_flow)[edge_mask][n]
-
-        jac -= np.diag(mass_flow_in)
-
-        errors = np.zeros((dim, dim))
-        for n, (i, j) in enumerate(zip(rows, columns)):
-            errors[i][j] = t_out[edge_mask][n] * np.abs(mass_flow)[edge_mask][n]
-
-        errors -= np.diag(mass_flow_in * t_nodes[node_mask])
-        errors = errors.sum(axis=1)
+        # Compute the error of the heat balance in each node
+        flows = np.abs(mass_flow[edge_mask])
+        errors = np.bincount(rows, t_out[edge_mask] * flows, minlength=dim)
+        errors -= mass_flow_in * t_nodes[node_mask]
 
         error = np.max(np.abs(errors))
         errors_list.append(error)
@@ -259,7 +253,16 @@ def solve_thermal(
             converged = True
             break
 
-        delta_t = np.linalg.solve(jac, -errors)
+        # Solve the Newton step. Sparse matrices are faster above about 100
+        # nodes, while dense ones are faster for smaller networks.
+        jac_values = t_out_der[edge_mask] * flows
+        if dim < 100:
+            jac = np.zeros((dim, dim))
+            jac[rows, columns] = jac_values
+            delta_t = np.linalg.solve(jac - np.diag(mass_flow_in), -errors)
+        else:
+            jac = sparse.csc_matrix((jac_values, (rows, columns)), shape=(dim, dim))
+            delta_t = spsolve((jac - sparse.diags(mass_flow_in)).tocsc(), -errors)
         t_nodes[node_mask] += damp * delta_t
 
         # The damping factor is lowered at each iteration
