@@ -29,6 +29,18 @@ class Component:
     Base class for components
     """
 
+    # Keys handled by _run_control_logic: looking up other keys skips the call.
+    # None means that all keys are passed to _run_control_logic.
+    _controlled_keys = frozenset()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Custom components that override _run_control_logic without declaring
+        # their keys get it called for every key
+        overrides = "_run_control_logic" in cls.__dict__
+        if overrides and "_controlled_keys" not in cls.__dict__:
+            cls._controlled_keys = None
+
     @docstring_parameters(
         TEMPERATURE=TEMPERATURE,
         MASS_FLOW=MASS_FLOW,
@@ -78,11 +90,11 @@ class Component:
             return self._get_class()
         elif key == "is_ideal":
             return self._get_is_ideal()
-        att = self._run_control_logic(key)
-        if att is None:
-            return self._attrs.get(key, np.nan)
-        else:
-            return att
+        if self._controlled_keys is None or key in self._controlled_keys:
+            att = self._run_control_logic(key)
+            if att is not None:
+                return att
+        return self._attrs.get(key, np.nan)
 
     def _reinitialize(self, overwrite=False):
         keys = [
