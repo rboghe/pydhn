@@ -462,17 +462,20 @@ class LagrangianPipe(Pipe):
         delta_qs = safe_divide(self._volumes * cp_fluid * delta_ts * rho_fluid, 3600.0)
         delta_q = np.sum(delta_qs)
 
-        # Displace volumes
-        if mdot != 0:
-            rho_fluid_new = fluid.get_rho(t_in)
-            new_vol = safe_divide(np.abs(mdot) * stepsize, rho_fluid_new)
+        # Displace volumes. With very small mass flows, like those given by the
+        # thermal solver to idle pipes, the new volume is below the round-off
+        # error of the pipe volume, so nothing is moved.
+        rho_fluid_new = fluid.get_rho(t_in)
+        new_vol = safe_divide(np.abs(mdot) * stepsize, rho_fluid_new)
+        displace = new_vol > np.finfo(float).eps * internal_volume * len(self._volumes)
+        if displace:
             new_volumes = np.insert(self._volumes, 0, new_vol)
             new_temps = np.insert(new_temps, 0, t_in)
         else:
             new_volumes = self._volumes
 
         # Find index of remaining and leaving volumes
-        if mdot != 0:
+        if displace:
             if new_vol == internal_volume:
                 out_idx = 1
             else:
@@ -492,7 +495,7 @@ class LagrangianPipe(Pipe):
         staying_volumes = new_volumes[:out_idx]
         staying_temperatures = new_temps[:out_idx]
 
-        if mdot != 0:
+        if displace:
             # Compute outlet temperature
             leaving_volumes = new_volumes[out_idx:]
             leaving_temperatures = new_temps[out_idx:]
@@ -508,7 +511,7 @@ class LagrangianPipe(Pipe):
             old_wall_temps = new_wall_temps.copy()
             new_wall_temps = np.interp(cumsum, last_cumsum, old_wall_temps)
         else:
-            # If mass flow is 0, use the temperatures of the first and last
+            # If no volume is moved, use the temperatures of the first and last
             # volumes
             t_out = staying_temperatures[-1]
             t_in = staying_temperatures[0]

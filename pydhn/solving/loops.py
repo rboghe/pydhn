@@ -14,7 +14,6 @@
 # Avoid circular import for type hints
 from typing import TYPE_CHECKING
 from typing import Optional
-from warnings import warn
 
 import numpy as np
 
@@ -164,12 +163,6 @@ class SimpleStep(AbstractLoop):
     def _thermal_simulation(
         self, net: "Network", fluid: "Fluid", soil: "Soil", **kwargs
     ):
-        if "ts_id" not in kwargs.keys():
-            warn(
-                "Running a thermal simulation without a ts_id specified. "
-                "This can lead to unexpected behaviours in dynamic components. "
-                "To suppress this warning, pass a ts_id value when calling .execute()"
-            )
         therm_res = solve_thermal(
             net=net, fluid=fluid, soil=soil, **self.thermal_sim_kwargs, **kwargs
         )

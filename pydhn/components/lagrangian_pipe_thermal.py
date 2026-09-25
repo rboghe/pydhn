@@ -179,27 +179,28 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     delta_q = np.add.reduceat(delta_qs, starts)
 
     # Move the parcels in 2D arrays with one row per pipe. The first column is
-    # left free for the new parcel entering flowing pipes, and there is room
-    # for splitting the parcel that partly leaves the pipe.
-    flow = mdot != 0
-    new_vol = np.where(flow, safe_divide(mdot * stepsize, fluid.get_rho(t_in)), 0.0)
+    # left free for the new parcel entering the pipe, and there is room for
+    # splitting the parcel that partly leaves it. As in the scalar model, very
+    # small mass flows do not move the parcels.
+    new_vol = safe_divide(mdot * stepsize, fluid.get_rho(t_in))
+    displace = new_vol > np.finfo(float).eps * internal_volume * counts
     W = counts.max() + 2
     rows = np.arange(P)
     vols2 = np.zeros((P, W))
     temps2 = np.zeros((P, W))
     row_of = rep(rows)
-    col_of = np.arange(len(volumes)) - rep(starts) + rep(flow)
+    col_of = np.arange(len(volumes)) - rep(starts) + rep(displace)
     vols2[row_of, col_of] = volumes
     temps2[row_of, col_of] = new_temps
-    vols2[flow, 0] = new_vol[flow]
-    temps2[flow, 0] = t_in[flow]
+    vols2[displace, 0] = new_vol[displace]
+    temps2[displace, 0] = t_in[displace]
 
     # Find the parcel that exceeds the pipe volume and split it in the part
     # that stays and the part that leaves, unless the new parcel exactly fills
     # the pipe
     cumsum = np.cumsum(vols2, axis=1)
-    exact_fill = flow & (new_vol == internal_volume)
-    split = flow & ~exact_fill
+    exact_fill = displace & (new_vol == internal_volume)
+    split = displace & ~exact_fill
     out_idx = np.argmax(cumsum > internal_volume[:, None], axis=1)
     out_part = np.where(split, cumsum[rows, out_idx] - internal_volume, 0.0)
     in_part = np.where(split, vols2[rows, out_idx] - out_part, 0.0)
@@ -215,19 +216,19 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     vols3[rows[split], out_idx[split] + 1] = out_part[split]
 
     # Find staying and leaving parcels
-    n_stay = np.where(flow, np.where(exact_fill, 1, out_idx + 1), counts)
+    n_stay = np.where(displace, np.where(exact_fill, 1, out_idx + 1), counts)
     staying = cols < n_stay[:, None]
-    leaving = (cols < (counts + flow + split)[:, None]) & ~staying
+    leaving = (cols < (counts + displace + split)[:, None]) & ~staying
 
-    # Compute outlet temperature. If the mass flow is zero, use the
-    # temperatures of the first and last parcels.
+    # Compute outlet temperature. If no parcel is moved, use the temperatures
+    # of the first and last parcels.
     lv = np.where(leaving, vols3, 0.0)
     t_out = np.where(
-        flow,
+        displace,
         safe_divide((lv * temps3).sum(axis=1), lv.sum(axis=1)),
         temps3[rows, counts - 1],
     )
-    t_in = np.where(flow, t_in, temps3[:, 0])
+    t_in = np.where(displace, t_in, temps3[:, 0])
 
     # Compute average temperature
     sv = np.where(staying, vols3, 0.0)
@@ -240,7 +241,7 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
         staying_temperatures = temps3[p, : n_stay[p]]
         wall_temperatures = new_wall_temps[old]
         # Update wall discretization to match that of volumes
-        if flow[p]:
+        if displace[p]:
             wall_temperatures = np.interp(
                 np.cumsum(staying_volumes), np.cumsum(volumes[old]), wall_temperatures
             )

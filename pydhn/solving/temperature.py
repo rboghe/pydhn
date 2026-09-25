@@ -23,7 +23,9 @@ def compute_edge_temperatures(
 ):
     """
     Computes the inlet, outlet and average temperature in each component, as
-    well as the derivative dT_out/dT_in.
+    well as the derivative dT_out/dT_in and the heat exchanged. Only the
+    edges in mask are computed, and their values are stored in the network if
+    set_values is True. Dynamic components update their state in any case.
     """
     # If a mask is not specified, all edges are considered
     if mask is None:
@@ -45,13 +47,16 @@ def compute_edge_temperatures(
         component_mask = net.mask(
             attr="component_type", value=component, condition="equality"
         )
+        n_components = len(component_mask)
         component_mask = np.intersect1d(mask, component_mask, assume_unique=True)
-        # If a vector function is specified for the component, use it
+        # If a vector function is specified for the component, use it. Vector
+        # functions compute all the components of a type, so they are only
+        # used if the mask includes all of them.
         has_vector = False
         if COMPONENT_FUNCTIONS_DICT[component] is not None:
             if "temperatures" in COMPONENT_FUNCTIONS_DICT[component].keys():
                 has_vector = True
-        if has_vector:
+        if has_vector and len(component_mask) == n_components:
             foo = COMPONENT_FUNCTIONS_DICT[component]["temperatures"]
             outs = foo(net=net, fluid=fluid, soil=soil, ts_id=ts_id)
             t_in[component_mask] = outs[0]
@@ -87,9 +92,9 @@ def compute_edge_temperatures(
     t_in = np.where(mass_flow_orig >= 0, t_0, t_1)
 
     if set_values:
-        net.set_edge_attributes(t_in, "inlet_temperature")
-        net.set_edge_attributes(t_out, "outlet_temperature")
-        net.set_edge_attributes(t_avg, "temperature")
-        net.set_edge_attributes(delta_q, "delta_q")
+        net.set_edge_attributes(t_in[mask], "inlet_temperature", mask=mask)
+        net.set_edge_attributes(t_out[mask], "outlet_temperature", mask=mask)
+        net.set_edge_attributes(t_avg[mask], "temperature", mask=mask)
+        net.set_edge_attributes(delta_q[mask], "delta_q", mask=mask)
 
     return t_in, t_out, t_avg, t_out_der, delta_q

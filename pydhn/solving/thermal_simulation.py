@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from pydhn import Network
     from pydhn import Soil
 
+# Components with an internal state that evolves at each time step
+DYNAMIC_COMPONENTS = ["lagrangian_pipe"]
+
 
 def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
     """
@@ -142,7 +145,8 @@ def solve_thermal(
     soil : Soil
         Soil object to be used in the simulation.
     error_threshold : float, optional
-        Error threshold for the solver in Wh. The default is 1e-6.
+        Error threshold for the solver, as the maximum imbalance of mass flow
+        times temperature in nodes (kg·K/s). The default is 1e-6.
     max_iters : int, optional
         Maximum number of iterations for the solver. The default is 100.
     damping_factor : float, optional
@@ -151,13 +155,16 @@ def solve_thermal(
         Whether to reduce the damping factor at each Newton iteration. The
         default is False.
     adaptive : bool, optional
-        Whether to reduce the damping factor on plateau. The default is True.
+        Whether to reduce the damping factor on plateau. The default is False.
     verbose : int, optional
         Controls the verbosity of the simulation. The default is 1.
     mass_flow_min : float, optional
         Mass flow (kg/s) used to approximate 0. The default is 1e-16.
     ts_id : int, optional
-        Specifies the ID of the current time-step. The default is None.
+        Specifies the ID of the current time-step. Dynamic components restore
+        their initial state when the same ID is repeated. If None and the
+        network has dynamic components, the ID following the last one used is
+        taken and a warning is raised. The default is None.
     **kwargs
         Arbitrary keyword arguments.
 
@@ -170,6 +177,23 @@ def solve_thermal(
     # Get mass flow and temperatures
     edges, mass_flow = net.edges("mass_flow")
     nodes, t_nodes = net.nodes("temperature")
+
+    # All the iterations of a time step must share the same ID, otherwise
+    # dynamic components would advance at each iteration
+    types = net.get_edges_attribute_array("component_type")
+    dynamic = np.isin(types, DYNAMIC_COMPONENTS)
+    if dynamic.any():
+        if ts_id is None:
+            msg = "No ts_id given: the thermal simulation is treated as a new "
+            msg += "time step. Pass the same ts_id to repeat a time step."
+            warn(msg, stacklevel=2)
+            ts_id = getattr(net, "_last_ts_id", -1) + 1
+        net._last_ts_id = ts_id
+
+    # Dynamic components with zero mass flow compute their outlet temperature
+    # at the end given by the sign of the new values, so they temporarily
+    # receive them as well
+    idle_dynamic = np.flatnonzero((mass_flow == 0) & dynamic)
 
     # Find direction of zero mass flow elements
     if np.any(mass_flow == 0):
@@ -199,11 +223,17 @@ def solve_thermal(
         # Set new temperatures
         net.set_node_attributes(t_nodes, "temperature")
 
-        # Is it a repetition?
-        # Compute temperature in edges
-        t_in, t_out, t_avg, t_out_der, delta_q = compute_edge_temperatures(
-            net, fluid, soil, set_values=True, ts_id=ts_id
-        )
+        # Compute temperature in edges. The zero mass flows of dynamic
+        # components are restored even if the computation fails.
+        idle_mass_flow = mass_flow[idle_dynamic]
+        net.set_edge_attributes(idle_mass_flow, "mass_flow", mask=idle_dynamic)
+        try:
+            t_in, t_out, t_avg, t_out_der, delta_q = compute_edge_temperatures(
+                net, fluid, soil, set_values=True, ts_id=ts_id
+            )
+        finally:
+            zeros = np.zeros_like(idle_mass_flow)
+            net.set_edge_attributes(zeros, "mass_flow", mask=idle_dynamic)
 
         jac = np.zeros((dim, dim))
         for n, (i, j) in enumerate(zip(rows, columns)):
