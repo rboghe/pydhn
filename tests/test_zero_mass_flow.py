@@ -76,8 +76,22 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
 
     def test_closed_loops(self):
         """
-        B -> X <- D and B -> Y <- D carry no flow. Both edges point into X
-        (and Y), so one of each pair must be reversed to form a loop.
+        Two overlapping loops, where B -> X <- D and B -> Y <- D carry no
+        flow. Both edges point into X (and Y), so one of each pair must be
+        reversed to form a loop:
+
+            ┌──────────> X <────────┐
+            │                       │
+            │      (1.0)            │
+            │   ┌─────────A         │
+            │   │         ^         │
+            │   │         │(1.0)    │
+            │   V         │         │
+            ├── B <────── D ────────┤
+            │      (-1.0) │         │
+            │             │         │
+            │             V         │
+            └───────────> Y <───────┘
         """
         net, mass_flow = network_with_flows(
             [
@@ -101,7 +115,18 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
             )
 
     def test_open_path(self):
-        """The zero flow path D -> Y -> X -> B must get a single direction."""
+        """
+        The zero flow path D -> Y -> X -> B must get a single direction:
+
+                   (1.0)          (1.0)
+               ┌───────────> A ───────────┐
+               │                          │
+               │           (1.0)          v
+               D <─────────────────────── B
+               │                          ^
+               │                          │
+               └─────> Y ─────> X ────────┘
+        """
         net, mass_flow = network_with_flows(
             ACTIVE_LOOP
             + [("DY", "D", "Y", 0.0), ("YX", "Y", "X", 0.0), ("XB", "X", "B", 0.0)]
@@ -114,8 +139,17 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
 
     def test_open_path_mixed_orientation(self):
         """
-        The zero flow path B - X1 - X2 - X3 - X4 - X5 - D has edges pointing
-        away from X3 in both directions: one half must be reversed.
+        The zero flow path between B and D has edges pointing away from X3 in
+        both directions, so one half must be reversed:
+
+                    (1.0)             (1.0)
+               ┌─────────────> A ──────────────┐
+               │                               │
+               │             (1.0)             v
+               D <──────────────────────────── B
+               ^                               ^
+               │                               │
+               X5 <─── X4 <─── X3 ───> X2 ───> X1
         """
         net, mass_flow = network_with_flows(
             ACTIVE_LOOP
