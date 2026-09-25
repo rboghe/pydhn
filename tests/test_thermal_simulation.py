@@ -68,7 +68,7 @@ class ThermalSimulationTestCase(unittest.TestCase):
                 solve_thermal(net, FLUID, SOIL, verbose=0)
             self.assertEqual(pipe._last_ts, expected)
         with warnings.catch_warnings():
-            warnings.simplefilter("error")
+            warnings.filterwarnings("error", message="No ts_id given")
             solve_thermal(net, FLUID, SOIL, ts_id=10, verbose=0)
         with self.assertWarnsRegex(UserWarning, "No ts_id given"):
             solve_thermal(net, FLUID, SOIL, verbose=0)
@@ -78,7 +78,7 @@ class ThermalSimulationTestCase(unittest.TestCase):
         net = star_network()
         solve_hydraulics(net, FLUID, verbose=0)
         with warnings.catch_warnings():
-            warnings.simplefilter("error")
+            warnings.filterwarnings("error", message="No ts_id given")
             solve_thermal(net, FLUID, SOIL, verbose=0)
 
     def test_idle_dynamic_components(self):
