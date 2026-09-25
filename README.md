@@ -10,9 +10,11 @@
 
 ## Installation
 
-PyDHN can be installed using pip directly from the GitHub repository:
+PyDHN requires Python 3.10 to 3.13. It can be installed using pip directly from the GitHub repository:
 
 `pip install git+https://github.com/idiap/pydhn`
+
+To install a specific release, add its tag, for example `pip install git+https://github.com/idiap/pydhn@v0.2.0`.
 
 ## Disclaimer: Beta Version
 

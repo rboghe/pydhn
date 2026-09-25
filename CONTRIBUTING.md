@@ -7,7 +7,7 @@ Welcome\! This document outlines the process and best practices for contributing
 Before you start, make sure you have:
 
   * **Git** installed.
-  * **Python** (`>=3.9,<3.13`) installed.
+  * **Python** (`>=3.10,<3.14`) installed.
   * **Poetry** (our dependency manager and build tool) installed. If you don't have it, follow the official Poetry installation guide.
 
 ### 2\. Initial Setup
