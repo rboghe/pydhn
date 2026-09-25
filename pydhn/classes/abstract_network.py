@@ -648,7 +648,11 @@ class AbstractNetwork:
             edges = list(edges & values.keys())
             values_dict = {k: values[k] for k in edges}
         else:
-            values_dict = dict(zip(self._get_edge_pointer(mask).edges(), values))
+            # Values follow the order of the mask
+            edges = list(self._graph.edges())
+            if mask is not None:
+                edges = [edges[i] for i in mask]
+            values_dict = dict(zip(edges, values))
         for k, v in values_dict.items():
             self._graph[k[0]][k[1]]["component"].set(name, v)
         # self._edge_cache.pop(name, None)

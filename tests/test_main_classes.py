@@ -266,6 +266,12 @@ class AbstractNetworkTestCase(unittest.TestCase):
         edge_att = net.get_edges_attribute_array("test_attribute")
         np.testing.assert_equal(edge_att, values)
 
+        # Values follow the order of the mask, also when it is not sorted
+        mask = np.array([2, 0])
+        net.set_edge_attributes([1.0, 2.0], "test_attribute", mask=mask)
+        _, edge_att = net.edges("test_attribute", mask=mask)
+        np.testing.assert_equal(edge_att, [1.0, 2.0])
+
         # Selections
         values = np.random.random(net.n_nodes)
         net.set_node_attributes(values, "test_attribute")
