@@ -76,7 +76,7 @@ class KusudaSoil(Soil):
         * 3600.0,  # default alpha value taken for clay (Arya, 2001) in m²/day as in CitySim
         timesteps_in_a_day=24,
     ):
-        super(KusudaSoil, self).__init__(name)
+        super(KusudaSoil, self).__init__(name, isconstant=isconstant)
 
         self.k = k
         self.alpha = alpha  # Thermal diffusivity

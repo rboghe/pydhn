@@ -285,6 +285,35 @@ class AbstractNetworkTestCase(unittest.TestCase):
         test_names = net.get_edges_with_attribute("test_attribute", value)
         np.testing.assert_equal(test_names, target_names)
 
+    def test_valve_and_pump_masks(self):
+        """
+        Test that valve and pump masks identify BranchValve and BranchPump
+        components and that the imposed masks only return edges where the
+        attribute is actually set.
+        """
+        net = Network()
+        for n in ("S1", "S2", "S3", "R1", "R2", "R3"):
+            net.add_node(n, z=0.0)
+        net.add_producer("main", "R1", "S1")
+        net.add_branch_valve("V", "S1", "S2")
+        net.add_pipe("SP", "S2", "S3", line="supply")
+        net.add_consumer("C", "S3", "R3")
+        net.add_pipe("RP", "R3", "R2", line="return")
+        net.add_branch_pump("P", "R2", "R1")
+
+        names = net.get_edges_attribute_array("name")
+        np.testing.assert_array_equal(net.valves_mask, np.where(names == "V")[0])
+        np.testing.assert_array_equal(net.pumps_mask, np.where(names == "P")[0])
+
+        # Nothing imposed yet: masks must be empty
+        np.testing.assert_array_equal(net.imposed_valves_mask, [])
+        np.testing.assert_array_equal(net.imposed_pumps_mask, [])
+
+        net.set_edge_attributes({("S1", "S2"): 10.0}, "kv_imposed")
+        net.set_edge_attributes({("R2", "R1"): 3000.0}, "rpm_imposed")
+        np.testing.assert_array_equal(net.imposed_valves_mask, net.valves_mask)
+        np.testing.assert_array_equal(net.imposed_pumps_mask, net.pumps_mask)
+
     def test_linegraph(self):
         """
         Test if the to_linegraph() method works as intended and preserves
