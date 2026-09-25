@@ -40,3 +40,4 @@ With PyDHN you can run both steady-state and dynamic simulations, test different
    :caption: About:
 
    about/references
+   about/changelog
