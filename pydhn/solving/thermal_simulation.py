@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from pydhn import Soil
 
 # Components with an internal state that evolves at each time step
-DYNAMIC_COMPONENTS = ["lagrangian_pipe"]
+DYNAMIC_COMPONENTS = ["lagrangian_pipe", "stratified_storage"]
 
 
 def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):

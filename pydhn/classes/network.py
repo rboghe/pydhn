@@ -28,6 +28,7 @@ from pydhn.components import Consumer
 from pydhn.components import LagrangianPipe
 from pydhn.components import Pipe
 from pydhn.components import Producer
+from pydhn.components import StratifiedStorage
 from pydhn.default_values import BYPASS_CASING_THICKNESS
 from pydhn.default_values import BYPASS_INSULATION_THICKNESS
 from pydhn.default_values import CASING_THICKNESS
@@ -61,14 +62,22 @@ from pydhn.default_values import SETPOINT_TYPE_HX_PROD
 from pydhn.default_values import SETPOINT_TYPE_HX_PROD_REV
 from pydhn.default_values import SETPOINT_TYPE_HYD_CONS
 from pydhn.default_values import SETPOINT_TYPE_HYD_PROD
+from pydhn.default_values import SETPOINT_TYPE_HYD_STORAGE
 from pydhn.default_values import SETPOINT_VALUE_HX_CONS
 from pydhn.default_values import SETPOINT_VALUE_HX_CONS_REV
 from pydhn.default_values import SETPOINT_VALUE_HX_PROD
 from pydhn.default_values import SETPOINT_VALUE_HX_PROD_REV
 from pydhn.default_values import SETPOINT_VALUE_HYD_CONS
 from pydhn.default_values import SETPOINT_VALUE_HYD_PROD
+from pydhn.default_values import SETPOINT_VALUE_HYD_STORAGE
 from pydhn.default_values import STATIC_PRESSURE
 from pydhn.default_values import STEPSIZE
+from pydhn.default_values import STORAGE_DELTA_K
+from pydhn.default_values import STORAGE_HEIGHT
+from pydhn.default_values import STORAGE_N_LAYERS
+from pydhn.default_values import STORAGE_U_VALUE
+from pydhn.default_values import STORAGE_VOLUME
+from pydhn.default_values import T_AMBIENT
 from pydhn.default_values import T_OUT_MIN
 from pydhn.default_values import T_SECONDARY
 from pydhn.utilities import docstring_parameters
@@ -780,6 +789,108 @@ class Network(AbstractNetwork):
             dz=delta_z,
             stepsize=stepsize,
             line=line,
+            **kwargs,
+        )
+
+        # Add entry to graph
+        self.add_component(
+            name=name, component=component, start_node=start_node, end_node=end_node
+        )
+
+    @docstring_parameters(
+        V=STORAGE_VOLUME,
+        H=STORAGE_HEIGHT,
+        NL=STORAGE_N_LAYERS,
+        U=STORAGE_U_VALUE,
+        DK=STORAGE_DELTA_K,
+        TA=T_AMBIENT,
+        STH=SETPOINT_TYPE_HYD_STORAGE,
+        SVH=SETPOINT_VALUE_HYD_STORAGE,
+        SZ=STEPSIZE,
+    )
+    def add_stratified_storage(
+        self,
+        name: Hashable,
+        start_node: Hashable,
+        end_node: Hashable,
+        volume: float = STORAGE_VOLUME,
+        height: float = STORAGE_HEIGHT,
+        n_layers: int = STORAGE_N_LAYERS,
+        u_value: float = STORAGE_U_VALUE,
+        delta_k: float = STORAGE_DELTA_K,
+        t_ambient: float = T_AMBIENT,
+        setpoint_type_hyd: str = SETPOINT_TYPE_HYD_STORAGE,
+        setpoint_value_hyd: float = SETPOINT_VALUE_HYD_STORAGE,
+        stepsize: float = STEPSIZE,
+        **kwargs,
+    ) -> None:
+        """
+        Adds a leaf component of type "stratified_storage" to the directed
+        graph of the network. The start node is connected to the top of the
+        tank and the end node to its bottom.
+
+        Parameters
+        ----------
+        name : Hashable
+            The label for the edge.
+        start_node : Hashable
+            Starting node of the edge, connected to the top of the tank.
+        end_node : Hashable
+            Ending node of the edge, connected to the bottom of the tank.
+        volume : float, optional
+            Water volume of the tank (m³). The default is {V}.
+        height : float, optional
+            Height of the tank (m). The default is {H}.
+        n_layers : int, optional
+            Number of layers. The default is {NL}.
+        u_value : float, optional
+            U-value of the tank envelope (W/(m²·K)). The default is {U}.
+        delta_k : float, optional
+            Thermal conductivity added to that of the fluid between layers
+            (W/(m·K)). The default is {DK}.
+        t_ambient : float, optional
+            Temperature around the tank (°C). The default is {TA}.
+        setpoint_type_hyd : str, optional
+            Hydraulic setpoint type. Only "mass_flow" is supported. The default
+            is "{STH}".
+        setpoint_value_hyd : float, optional
+            Imposed mass flow (kg/s), positive to charge the tank and negative
+            to discharge it. The default is {SVH}.
+        stepsize : float, optional
+            Size of a time-step (s). The default is {SZ}.
+        **kwargs : dict
+            Additional keyword arguments, such as the initial temperature of
+            all layers (temperature) or of each layer from the top to the
+            bottom (initial_layer_temperatures).
+
+        Returns
+        -------
+        None
+            This method does not return any value.
+
+        Examples
+        --------
+
+            >>> from pydhn import Network
+            >>> net = Network()
+            >>> net.add_node(0, z=0)
+            >>> net.add_node(1, z=0)
+            >>> net.add_stratified_storage('tank', 0, 1, volume=50.0)
+            >>> net[(0, 1)]["volume"]
+            50.0
+
+        """
+        component = StratifiedStorage(
+            name=name,
+            volume=volume,
+            height=height,
+            n_layers=n_layers,
+            u_value=u_value,
+            delta_k=delta_k,
+            t_ambient=t_ambient,
+            setpoint_type_hyd=setpoint_type_hyd,
+            setpoint_value_hyd=setpoint_value_hyd,
+            stepsize=stepsize,
             **kwargs,
         )
 
