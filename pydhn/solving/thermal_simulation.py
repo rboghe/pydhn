@@ -277,11 +277,11 @@ def solve_thermal(
     if verbose > 0:
         if converged:
             msg = f"Thermal simulation converged after {k} iterations with "
-            msg += f"an error of {error} °C"
+            msg += f"an error of {error} kg·K/s"
             print(msg)
         else:
             msg = "Thermal simulation not converged with an error of "
-            msg += f"{error} °C!"
+            msg += f"{error} kg·K/s!"
             warn(msg)
 
     results = Results(
