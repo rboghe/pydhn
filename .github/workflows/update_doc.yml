@@ -33,6 +33,7 @@ jobs:
         run: |
           make -C docs clean
           sphinx-apidoc -o docs/source/generated pydhn -f -t docs/source/_templates/apidoc --module-first --implicit-namespaces --separate
+          make -C docs doctest
           make -C docs html
 
       - name: Init new repo in dist folder and commit generated files
