@@ -12,6 +12,7 @@
 
 import copy
 import json
+import pickle  # nosec B403
 from collections import defaultdict
 from typing import Any
 from typing import Callable
@@ -1022,12 +1023,20 @@ class AbstractNetwork:
         return G
 
     def save_graph(self, filename):
-        # pickle.dump(self._graph, open(f'{filename}.txt', 'w'))
-        nx.write_gpickle(self._graph, f"{filename}.gpickle")
+        """Saves the network graph with pickle, in filename.gpickle."""
+        with open(f"{filename}.gpickle", "wb") as f:
+            pickle.dump(self._graph, f)
 
     def load_graph(self, filename):
+        """
+        Loads a network graph saved with save_graph(). As any pickle file, it
+        can run code when loaded: only load files you trust.
+        """
         # TODO: OWN FORMAT
-        self._graph = nx.read_gpickle(f"{filename}.gpickle")
+        with open(f"{filename}.gpickle", "rb") as f:
+            self._graph = pickle.load(f)  # nosec B301
+        self._edge_cache = None
+        self._matrix_cache.clear()
 
     def save_gml(self, filename):
         def stringify(s):

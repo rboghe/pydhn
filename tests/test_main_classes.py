@@ -9,11 +9,14 @@
 
 """Tests for the main Network class and abstract class"""
 
+import os
+import tempfile
 import unittest
 
 import numpy as np
 
 from pydhn import Network
+from pydhn.networks import star_network
 
 
 def star_network():
@@ -337,3 +340,23 @@ class AbstractNetworkTestCase(unittest.TestCase):
         data = {n: d["test_attribute"] for n, d in lg.nodes(data="component")}
         np.testing.assert_equal(lg.number_of_nodes(), 20)
         np.testing.assert_equal(data, dict_with_names)
+
+
+class SaveLoadGraphTestCase(unittest.TestCase):
+    def test_save_and_load_graph(self):
+        """A saved graph is loaded back identically, replacing cached data."""
+        net = star_network()
+        loaded = Network()
+        loaded.add_node("X")
+        loaded.incidence_matrix  # Fill the cache with the old graph
+        with tempfile.TemporaryDirectory() as folder:
+            filename = os.path.join(folder, "star")
+            net.save_graph(filename)
+            loaded.load_graph(filename)
+        np.testing.assert_array_equal(loaded.edges(), net.edges())
+        np.testing.assert_array_equal(loaded.incidence_matrix, net.incidence_matrix)
+        for attribute in ("name", "length", "component_type"):
+            np.testing.assert_array_equal(
+                loaded.get_edges_attribute_array(attribute),
+                net.get_edges_attribute_array(attribute),
+            )
