@@ -316,7 +316,7 @@ def to_citysim_xml(
             n_days = len(demand_dataframe)
         else:
             n_days = min(n_days, len(demand_dataframe))
-    climate = pd.read_csv(climatefile_path, skiprows=3, delim_whitespace=True)
+    climate = pd.read_csv(climatefile_path, skiprows=3, sep=r"\s+")
     cols = [str(col).lower().strip() for col in climate.columns]
     day_col_idx = cols.index("dm")
     month_col_idx = cols.index("m")
