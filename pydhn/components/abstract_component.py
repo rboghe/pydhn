@@ -33,6 +33,10 @@ class Component:
     # None means that all keys are passed to _run_control_logic.
     _controlled_keys = frozenset()
 
+    # Whether the component has an internal state that evolves at each time
+    # step, which requires all the iterations of a step to share its ID
+    _is_dynamic = False
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         # If neither the class providing _run_control_logic, which can also be
@@ -92,6 +96,8 @@ class Component:
             return self._get_class()
         elif key == "is_ideal":
             return self._get_is_ideal()
+        elif key == "is_dynamic":
+            return self._is_dynamic
         if self._controlled_keys is None or key in self._controlled_keys:
             att = self._run_control_logic(key)
             if att is not None:

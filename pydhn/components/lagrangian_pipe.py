@@ -55,6 +55,8 @@ class LagrangianPipe(Pipe):
     As a branch component.
     """
 
+    _is_dynamic = True
+
     @docstring_parameters(
         D_PIPES,
         DEPTH,
@@ -90,7 +92,7 @@ class LagrangianPipe(Pipe):
         stepsize=STEPSIZE,
         h_ext=H_EXT,
         line=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Constructs all the necessary attributes for the object.

@@ -56,6 +56,8 @@ class StratifiedStorage(Component):
     properties are evaluated once per time step, at the mean tank temperature.
     """
 
+    _is_dynamic = True
+
     @docstring_parameters(
         STORAGE_VOLUME,
         STORAGE_HEIGHT,

@@ -28,9 +28,6 @@ if TYPE_CHECKING:
     from pydhn import Network
     from pydhn import Soil
 
-# Components with an internal state that evolves at each time step
-DYNAMIC_COMPONENTS = ["lagrangian_pipe", "stratified_storage"]
-
 
 def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
     """
@@ -182,8 +179,7 @@ def solve_thermal(
 
     # All the iterations of a time step must share the same ID, otherwise
     # dynamic components would advance at each iteration
-    types = net.get_edges_attribute_array("component_type")
-    dynamic = np.isin(types, DYNAMIC_COMPONENTS)
+    dynamic = net.get_edges_attribute_array("is_dynamic").astype(bool)
     if dynamic.any():
         if ts_id is None:
             msg = "No ts_id given: the thermal simulation is treated as a new "

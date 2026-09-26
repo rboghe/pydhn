@@ -19,6 +19,7 @@ import numpy as np
 from pydhn import ConstantWater
 from pydhn import Network
 from pydhn import Soil
+from pydhn.components import StratifiedStorage
 from pydhn.components.vector_functions import COMPONENT_FUNCTIONS_DICT
 from pydhn.networks import star_network
 from pydhn.solving import solve_hydraulics
@@ -73,6 +74,30 @@ class ThermalSimulationTestCase(unittest.TestCase):
         with self.assertWarnsRegex(UserWarning, "No ts_id given"):
             solve_thermal(net, FLUID, SOIL, verbose=0)
         self.assertEqual(pipe._last_ts, 11)
+
+    def test_custom_dynamic_component(self):
+        """Subclasses of dynamic components with a new type are also dynamic."""
+
+        class CustomStorage(StratifiedStorage):
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self._type = "custom_storage"
+
+        results = []
+        for storage in (StratifiedStorage, CustomStorage):
+            net = Network()
+            for name in ("A", "B", "C"):
+                net.add_node(name, temperature=50.0)
+            tank = storage(name="T", volume=0.1, n_layers=1, mass_flow=1.0)
+            net.add_component("T", "A", "B", tank)
+            tank = net["A", "B"]
+            net.add_pipe("P", "B", "C", length=0.01, diameter=0.1, mass_flow=1.0)
+            net.add_producer("H", "C", "A", mass_flow=1.0, setpoint_type_hx="delta_t")
+            with self.assertWarnsRegex(UserWarning, "No ts_id given"):
+                solve_thermal(net, FLUID, SOIL, verbose=0)
+            self.assertEqual(tank._last_ts, 0)
+            results.append(tank._layer_temperatures)
+        np.testing.assert_array_equal(results[0], results[1])
 
     def test_no_warning_without_dynamic_components(self):
         net = star_network()
