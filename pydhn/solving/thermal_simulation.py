@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pydhn import Soil
 
 
-def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
+def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     """
     The function solve_thermal() ignores all edges where the mass flow is zero.
     In order to avoid this, these values need to be temporarily replaced with a
@@ -37,18 +37,16 @@ def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
     edges of the network graph are assigned the direction in which the mass
     flow is positive, no nodes have only incoming or outgoing edges.
 
-    The signs follow an Eulerian circuit of the zero flow edges: every time
-    the circuit enters a node, it also leaves it. Nodes with an odd number of
-    zero flow edges are first connected to a temporary node, so that a
-    circuit always exists. They become the ends of open paths.
+    The signs follow an Eulerian circuit of each group of connected zero flow
+    edges: every time the circuit enters a node, it also leaves it. In each
+    group, nodes with an odd number of zero flow edges are first connected to
+    a temporary node, so that a circuit exists. They become the ends of open
+    paths.
 
     Parameters
     ----------
     net : Network
         Network object.
-    edges : Array
-        Array of edges in the network. Since it is needed in solve_thermal(),
-        not recomputing it saves some time.
     mass_flow : Array
         Array of mass flow values. Since it is needed in solve_thermal(),
         not recomputing it saves some time.
@@ -64,32 +62,22 @@ def _fill_zero_mass_flow(net, edges, mass_flow, mass_flow_min=1e-16):
         converging or diverging nodes are created.
 
     """
-    # Find direction of zero mass flow elements such that
-    G = net._graph
-
-    zero_mdot_list = list(map(tuple, edges[np.where(mass_flow == 0.0)[0]]))
-    S = G.edge_subgraph(zero_mdot_list).copy().to_undirected()
-    degrees = np.array(S.degree())
-    indices = np.where(degrees[:, 1].astype(float) % 2 != 0)[0]
-    if len(indices) != 0:
-        new_node = "eulerian_node"
-        new_edges = [("eulerian_node", n) for n in degrees[indices, 0]]
-        S.add_edges_from(new_edges)
-    else:
-        # All degrees are even: the circuit can start from any node
-        new_node = next(iter(S.nodes()))
-    for u, v in nx.eulerian_circuit(S, source=new_node):
-        if "eulerian_node" in [u, v]:
-            continue
-        pos_arr = np.where((edges == (u, v)).all(axis=1))[0]
-        neg_arr = np.where((edges == (v, u)).all(axis=1))[0]
-        assert len(pos_arr) + len(neg_arr) == 1
-        if len(pos_arr) == 1:
-            mass_flow[pos_arr[0]] = mass_flow_min
-        elif len(neg_arr) == 1:
-            mass_flow[neg_arr[0]] = mass_flow_min * -1
-        else:
-            raise ValueError("Repeated edge found.")
+    # Position of each edge in the mass flow array
+    index = {edge: i for i, edge in enumerate(net._graph.edges())}
+    zero_edges = nx.Graph([edge for edge, i in index.items() if mass_flow[i] == 0])
+    for nodes in nx.connected_components(zero_edges):
+        group = zero_edges.subgraph(nodes).copy()
+        odd = [n for n, degree in group.degree() if degree % 2]
+        # A new object cannot have the same name as a node of the network
+        temporary_node = object()
+        group.add_edges_from((temporary_node, n) for n in odd)
+        source = temporary_node if odd else next(iter(group))
+        # Edges to the temporary node are not in the network and are skipped
+        for u, v in nx.eulerian_circuit(group, source=source):
+            if (u, v) in index:
+                mass_flow[index[u, v]] = mass_flow_min
+            elif (v, u) in index:
+                mass_flow[index[v, u]] = -mass_flow_min
     assert not np.isin(0, mass_flow)
     return mass_flow
 
@@ -174,8 +162,8 @@ def solve_thermal(
 
     """
     # Get mass flow and temperatures
-    edges, mass_flow = net.edges("mass_flow")
-    nodes, t_nodes = net.nodes("temperature")
+    _, mass_flow = net.edges("mass_flow")
+    _, t_nodes = net.nodes("temperature")
 
     # All the iterations of a time step must share the same ID, otherwise
     # dynamic components would advance at each iteration
@@ -197,7 +185,6 @@ def solve_thermal(
     if np.any(mass_flow == 0):
         mass_flow = _fill_zero_mass_flow(
             net=net,
-            edges=edges,
             mass_flow=mass_flow,
             mass_flow_min=mass_flow_min,
         )

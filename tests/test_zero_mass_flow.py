@@ -45,7 +45,7 @@ def network_with_flows(edge_specs):
 
 
 def fill(net, mass_flow):
-    return _fill_zero_mass_flow(net, net.edges(), mass_flow.copy(), MASS_FLOW_MIN)
+    return _fill_zero_mass_flow(net, mass_flow.copy(), MASS_FLOW_MIN)
 
 
 def flows_by_name(net, mass_flow, names):
@@ -173,6 +173,62 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
         to_d = np.sign(flows_by_name(net, filled, ["X3_X4", "X4_X5", "X5_D"]))
         np.testing.assert_array_equal(to_b, to_b[0])
         np.testing.assert_array_equal(to_d, -to_b[0])
+        self.check_open_path(net, mass_flow, filled, {"B", "D"})
+
+    def test_separate_closed_loops(self):
+        """
+        Two separate zero flow loops, A -> P -> Q -> A and D -> R -> S -> D:
+
+            P ────> Q           R ───> S
+            ^       │           ^      │
+            │       v           │      v
+            └────── A ──> B ──> D ─────┘
+                    ^           │
+                    └───────────┘
+        """
+        net, mass_flow = network_with_flows(
+            [
+                ("AB", "A", "B", 1.0),
+                ("BD", "B", "D", 1.0),
+                ("DA", "D", "A", 1.0),
+                ("AP", "A", "P", 0.0),
+                ("PQ", "P", "Q", 0.0),
+                ("QA", "Q", "A", 0.0),
+                ("DR", "D", "R", 0.0),
+                ("RS", "R", "S", 0.0),
+                ("SD", "S", "D", 0.0),
+            ]
+        )
+        filled = fill(net, mass_flow)
+        self.check_fill(mass_flow, filled)
+        np.testing.assert_array_equal(net.incidence_matrix @ (filled - mass_flow), 0)
+
+    def test_closed_loop_and_separate_open_path(self):
+        """
+        A zero flow loop A -> P -> Q -> A and a separate zero flow path
+        B -> Y -> D:
+
+            P ────> Q     Y ────┐
+            ^       │     ^     │
+            │       v     │     v
+            └────── A ──> B ──> D
+                    ^           │
+                    └───────────┘
+        """
+        net, mass_flow = network_with_flows(
+            [
+                ("AB", "A", "B", 1.0),
+                ("BD", "B", "D", 1.0),
+                ("DA", "D", "A", 1.0),
+                ("AP", "A", "P", 0.0),
+                ("PQ", "P", "Q", 0.0),
+                ("QA", "Q", "A", 0.0),
+                ("BY", "B", "Y", 0.0),
+                ("YD", "Y", "D", 0.0),
+            ]
+        )
+        filled = fill(net, mass_flow)
+        self.check_fill(mass_flow, filled)
         self.check_open_path(net, mass_flow, filled, {"B", "D"})
 
     def test_idle_consumer_branch(self):
