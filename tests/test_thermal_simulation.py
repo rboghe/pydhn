@@ -11,6 +11,7 @@
 
 import unittest
 import warnings
+from copy import deepcopy
 from itertools import product
 from unittest.mock import patch
 
@@ -159,6 +160,39 @@ class ThermalSimulationTestCase(unittest.TestCase):
         solve_thermal(net, FLUID, SOIL, verbose=0)
         self.assertEqual(consumer["delta_q"], 0.0)
         self.assertEqual(consumer["outlet_temperature"], net["S8"]["temperature"])
+
+    def test_dense_and_sparse_solvers(self):
+        """Dense and sparse matrices give the same results."""
+        net = star_network()
+        solve_hydraulics(net, FLUID, verbose=0)
+        temperatures = []
+        for sparse_min_nodes in (100, 0):
+            with patch(
+                "pydhn.solving.thermal_simulation.SPARSE_MIN_NODES", sparse_min_nodes
+            ):
+                copy = deepcopy(net)
+                solve_thermal(copy, FLUID, SOIL, error_threshold=1e-12, verbose=0)
+                temperatures.append(copy.get_nodes_attribute_array("temperature"))
+        np.testing.assert_allclose(temperatures[0], temperatures[1], atol=1e-10)
+
+    def test_singular_matrix(self):
+        """
+        Both solvers raise an error if the temperature of a node is undefined,
+        like that of P, as the idle pipe P -> Q is not connected to any flow.
+        """
+        net = Network()
+        for name in ("A", "B", "C", "P", "Q"):
+            net.add_node(name, temperature=50.0)
+        pipe = dict(length=1.0, reynolds=1e4, friction_factor=0.03)
+        net.add_pipe("AB", "A", "B", mass_flow=1.0, **pipe)
+        net.add_pipe("BC", "B", "C", mass_flow=1.0, **pipe)
+        net.add_producer("H", "C", "A", mass_flow=1.0)
+        net.add_pipe("PQ", "P", "Q", mass_flow=0.0, **pipe)
+        for sparse_min_nodes in (100, 0):
+            with self.subTest(sparse=sparse_min_nodes == 0), patch(
+                "pydhn.solving.thermal_simulation.SPARSE_MIN_NODES", sparse_min_nodes
+            ), self.assertRaises(np.linalg.LinAlgError):
+                solve_thermal(deepcopy(net), FLUID, SOIL, verbose=0)
 
 
 if __name__ == "__main__":

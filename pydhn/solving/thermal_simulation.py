@@ -28,6 +28,10 @@ if TYPE_CHECKING:
     from pydhn import Network
     from pydhn import Soil
 
+# Networks with at least this number of nodes use sparse matrices, which are
+# faster for large networks, while dense ones are faster for small networks
+SPARSE_MIN_NODES = 100
+
 
 def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     """
@@ -260,16 +264,18 @@ def solve_thermal(
             converged = True
             break
 
-        # Solve the Newton step. Sparse matrices are faster above about 100
-        # nodes, while dense ones are faster for smaller networks.
+        # Solve the Newton step
         jac_values = t_out_der[edge_mask] * flows
-        if dim < 100:
+        if dim < SPARSE_MIN_NODES:
             jac = np.zeros((dim, dim))
             jac[rows, columns] = jac_values
             delta_t = np.linalg.solve(jac - np.diag(mass_flow_in), -errors)
         else:
             jac = sparse.csc_matrix((jac_values, (rows, columns)), shape=(dim, dim))
             delta_t = spsolve((jac - sparse.diags(mass_flow_in)).tocsc(), -errors)
+            # Unlike np.linalg.solve, spsolve returns NaNs for singular matrices
+            if not np.all(np.isfinite(delta_t)):
+                raise np.linalg.LinAlgError("Singular matrix")
         t_nodes[node_mask] += damp * delta_t
 
         # The damping factor is lowered at each iteration
