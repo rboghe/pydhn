@@ -147,7 +147,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install the package and Sphinx
-        run: pip install -e . sphinx sphinx-rtd-theme sphinx-autoapi
+        run: pip install -e . sphinx sphinx-rtd-theme
 
       - name: Run the documentation doctests
         run: |
