@@ -320,7 +320,7 @@ class LagrangianPipe(Pipe):
         )
         return res1, res2
 
-    def _compute_temperatures(self, fluid, soil, t_in, ts_id=0):
+    def _compute_temperatures(self, fluid, soil, t_in, ts_id=None):
         # If it is a repeated step, restore previous conditions
         if self._last_ts is not None:
             if self._last_ts == ts_id:

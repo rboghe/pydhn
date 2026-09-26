@@ -124,6 +124,16 @@ class LagrangianPipeMirrorSymmetry(unittest.TestCase):
                 ts,
             )
 
+    def test_direct_calls_without_ts_id(self):
+        """Each direct call without a ts_id advances the pipe by one step."""
+        fluid, soil = Water(), Soil(temp=8)
+        pipe = LagrangianPipe(**PIPE_KWARGS)
+        pipe.set("mass_flow", 0.3)
+        pipe._compute_delta_p(fluid)
+        for n_parcels in (2, 3):
+            pipe._compute_temperatures(fluid, soil, t_in=70.0)
+            self.assertEqual(len(pipe._volumes), n_parcels)
+
 
 class LagrangianPipeOutletDerivative(unittest.TestCase):
     def test_outlet_derivative(self):
