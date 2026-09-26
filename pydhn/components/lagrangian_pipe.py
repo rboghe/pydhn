@@ -518,8 +518,9 @@ class LagrangianPipe(Pipe):
             t_out = staying_temperatures[-1]
             t_in = staying_temperatures[0]
 
-        # Only the water entering in excess of the pipe volume leaves at the inlet
-        # temperature: it is the part of the outlet that depends on it
+        # The water entering in excess of the pipe volume leaves at the inlet
+        # temperature. The effect of the inlet temperature on the density, and
+        # so on the volume entering the pipe, is neglected.
         t_out_der = safe_divide(max(new_vol - internal_volume, 0.0), new_vol)
 
         # Compute average temperature

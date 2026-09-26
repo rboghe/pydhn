@@ -230,8 +230,9 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     )
     t_in = np.where(displace, t_in, temps3[:, 0])
 
-    # Only the water entering in excess of the pipe volume leaves at the inlet
-    # temperature: it is the part of the outlet that depends on it
+    # The water entering in excess of the pipe volume leaves at the inlet
+    # temperature. The effect of the inlet temperature on the density, and
+    # so on the volume entering the pipe, is neglected.
     t_out_der = safe_divide(np.maximum(new_vol - internal_volume, 0.0), new_vol)
 
     # Compute average temperature
