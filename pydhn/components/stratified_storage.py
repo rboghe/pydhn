@@ -157,9 +157,10 @@ class StratifiedStorage(Component):
 
         # Tank internal status: temperature of each layer from the top
         if initial_layer_temperatures is None:
-            self._layer_temperatures = np.full(n_layers, float(temperature))
-        else:
-            self._layer_temperatures = np.array(initial_layer_temperatures, float)
+            initial_layer_temperatures = np.full(n_layers, float(temperature))
+        self._layer_temperatures = np.array(initial_layer_temperatures, float)
+        if self._layer_temperatures.shape != (n_layers,):
+            raise ValueError("initial_layer_temperatures needs one value per layer")
         self._attrs["temperature"] = self._layer_temperatures.mean()
 
         # Tank internal status at the former time step
@@ -172,6 +173,8 @@ class StratifiedStorage(Component):
     def _validate(key, value):
         if key == "setpoint_type_hyd" and value != "mass_flow":
             raise ValueError('Storages only support setpoint_type_hyd="mass_flow"')
+        if key == "n_layers" and not isinstance(value, (int, np.integer)):
+            raise ValueError("n_layers must be an integer")
         if key in ("volume", "height", "n_layers", "stepsize") and not value > 0:
             raise ValueError(f"{key} must be positive")
         if key in ("u_value", "delta_k") and not value >= 0:

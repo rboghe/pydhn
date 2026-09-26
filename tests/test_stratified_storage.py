@@ -187,6 +187,8 @@ class StratifiedStorageTestCase(unittest.TestCase):
             ("height", -1.0),
             ("stepsize", 0.0),
             ("n_layers", 0),
+            ("n_layers", 2.5),
+            ("n_layers", 10.0),
             ("u_value", -1.0),
             ("delta_k", -1.0),
             ("setpoint_type_hyd", "pressure"),
@@ -198,6 +200,11 @@ class StratifiedStorageTestCase(unittest.TestCase):
                 tank = make_tank()
                 with self.assertRaises(ValueError):
                     tank.set(key, value)
+        # Profiles must have one temperature per layer
+        for profile in ([50.0], [80.0, 40.0], np.full((10, 1), 50.0)):
+            with self.subTest(profile=profile):
+                with self.assertRaises(ValueError):
+                    make_tank(initial_layer_temperatures=profile)
 
     def test_geometry_updates(self):
         """Changing the geometry gives the same results as a new tank."""
