@@ -61,7 +61,7 @@ To set up your local development environment:
     Ensure all tests pass before committing:
 
     ```bash
-    python -m unittest discover
+    poetry run python -m unittest discover
     ```
 
 5.  **Commit your changes:**
