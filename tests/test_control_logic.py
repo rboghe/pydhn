@@ -101,6 +101,23 @@ class ControlLogicDispatchTestCase(unittest.TestCase):
                     self.assertEqual(comp["other"], 7.0)
                     self.assertTrue(np.isnan(comp["not_there"]))
 
+    def test_control_logic_from_mixin(self):
+        """Control logic provided by another base class is also called."""
+
+        class Controls:
+            def _run_control_logic(self, key):
+                return 42.0 if key == "target" else None
+
+        class Custom(Controls, Component):
+            pass
+
+        class Declared(Controls, Component):
+            _controlled_keys = frozenset({"other"})
+
+        self.assertEqual(Custom(target=-1.0)["target"], 42.0)
+        # Keys declared by a subclass are respected
+        self.assertEqual(Declared(target=-1.0)["target"], -1.0)
+
     def test_inherited_keys(self):
         """Subclasses that do not override the control logic keep its keys."""
         for base in (Consumer, BranchPump):

@@ -35,10 +35,12 @@ class Component:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        # Custom components that override _run_control_logic without declaring
-        # their keys get it called for every key
-        overrides = "_run_control_logic" in cls.__dict__
-        if overrides and "_controlled_keys" not in cls.__dict__:
+        # If neither the class providing _run_control_logic, which can also be
+        # a mixin, nor its subclasses declare the keys, it is called for all
+        mro = cls.__mro__
+        owner = next(c for c in mro if "_run_control_logic" in c.__dict__)
+        subclasses = mro[: mro.index(owner) + 1]
+        if not any("_controlled_keys" in c.__dict__ for c in subclasses):
             cls._controlled_keys = None
 
     @docstring_parameters(
@@ -51,7 +53,7 @@ class Component:
         temperature: float = TEMPERATURE,
         mass_flow: float = MASS_FLOW,
         delta_p: float = DELTA_P,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Init Component
