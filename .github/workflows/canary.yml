@@ -36,6 +36,8 @@ jobs:
       # geopandas is imported directly: the suite only imports it lazily, so
       # running the tests alone would not exercise the geopandas ABI.
       - name: Import check (package + geopandas)
+        # Outside the checkout, so that the installed package is imported
+        working-directory: ${{ runner.temp }}
         run: python -c "import pydhn; import geopandas; print('import OK')"
 
       - name: Run tests

@@ -127,4 +127,29 @@ jobs:
       # geopandas is imported directly: pydhn only imports it lazily, so
       # importing the package alone would not exercise the geopandas ABI.
       - name: Import check (package + geopandas)
+        # Outside the checkout, so that the installed package is imported
+        working-directory: ${{ runner.temp }}
         run: python -c "import pydhn; import geopandas; print('import OK')"
+
+  # Runs the examples of the documentation, which update_doc.yml runs again
+  # before publishing it
+  docs:
+    name: documentation examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install the package and Sphinx
+        run: pip install -e . sphinx sphinx-rtd-theme sphinx-autoapi
+
+      - name: Run the documentation doctests
+        run: |
+          sphinx-apidoc -o docs/source/generated pydhn -f -t docs/source/_templates/apidoc --module-first --implicit-namespaces --separate
+          make -C docs doctest
