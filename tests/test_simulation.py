@@ -329,7 +329,7 @@ class SimulationConsistencyTestCase(unittest.TestCase):
 
         # Check node temperature:
         t_1 = res_1_thermal["nodes"]["temperature"][0]
-        t_2 = res_1_thermal["nodes"]["temperature"][0]
+        t_2 = res_2_thermal["nodes"]["temperature"][0]
 
         t_out_prod = net_1["S1"]["temperature"]
         t_out_setpoint = net_1[("R8", "S1")]["setpoint_value_hx"]
@@ -376,31 +376,15 @@ class SimulationConsistencyTestCase(unittest.TestCase):
         # Check that the losses are the same in pipes with no inclination
         np.testing.assert_almost_equal(delta_p_1[mask], delta_p_2[mask], decimal=9)
 
-        # Check that Delta p is computed correctly in net_2
-        delta_p_supply = net_2[("S1", "S2")]["delta_p"]
-        delta_p_return = net_2[("R7", "R8")]["delta_p"]
-
-        friction_supply = net_2[("S1", "S2")]["delta_p_friction"]
-        friction_return = net_2[("R7", "R8")]["delta_p_friction"]
-
-        hydrostatic_supply = net_2[("S1", "S2")]["delta_p_hydrostatic"]
-        hydrostatic_return = net_2[("R7", "R8")]["delta_p_hydrostatic"]
-
-        # Friction in net_2 should be equal to total delta_p in net_1
-        delta_p_supply_1 = net_2[("S1", "S2")]["delta_p"]
-        delta_p_return_1 = net_2[("R7", "R8")]["delta_p"]
-
-        np.testing.assert_almost_equal(delta_p_supply, delta_p_supply_1, decimal=9)
-
-        np.testing.assert_almost_equal(delta_p_return, delta_p_return_1, decimal=9)
-
-        # Delta p should be equal to friction + hydrostatic
-        delta_p_supply_computed = friction_supply + hydrostatic_supply
-        delta_p_return_computed = friction_return + hydrostatic_return
-
-        np.testing.assert_almost_equal(
-            delta_p_supply, delta_p_supply_computed, decimal=9
-        )
-        np.testing.assert_almost_equal(
-            delta_p_return, delta_p_return_computed, decimal=9
-        )
+        # In net_1, delta_p is the sum of friction and hydrostatic pressure, and
+        # friction is the same as delta_p in net_2, without hydrostatic pressure
+        for edge, dz in ((("S1", "S2"), 20.0), (("R7", "R8"), -20.0)):
+            pipe_1, pipe_2 = net_1[edge], net_2[edge]
+            hydrostatic = fluid.rho * 9.81 * dz
+            self.assertAlmostEqual(pipe_1["delta_p_hydrostatic"], hydrostatic)
+            np.testing.assert_allclose(
+                pipe_1["delta_p"], pipe_1["delta_p_friction"] + hydrostatic
+            )
+            np.testing.assert_allclose(
+                pipe_1["delta_p_friction"], pipe_2["delta_p"], rtol=1e-8
+            )
