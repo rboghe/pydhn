@@ -17,13 +17,15 @@
 
 import os
 import sys
+from importlib.metadata import version
 
 project = "PyDHN"
 copyright = (
     "2024, Idiap Research Institute, https://www.idiap.ch, EPFL, https://www.epfl.ch"
 )
 author = "Roberto Boghetti"
-release = "0.1.3"
+# The version is set in pyproject.toml
+release = version("pydhn")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
