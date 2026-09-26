@@ -15,17 +15,18 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import importlib.metadata
 import os
 import sys
-from importlib.metadata import version
 
 project = "PyDHN"
 copyright = (
     "2024, Idiap Research Institute, https://www.idiap.ch, EPFL, https://www.epfl.ch"
 )
 author = "Roberto Boghetti"
-# The version is set in pyproject.toml
-release = version("pydhn")
+# The version is set in pyproject.toml. Sphinx reads all the names defined
+# here, and "version" is one of its settings.
+release = importlib.metadata.version("pydhn")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
