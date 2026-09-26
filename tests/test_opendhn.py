@@ -45,14 +45,14 @@ def _read(z, name, **kwargs):
 
 def build_network():
     """Build the OpenDHN CASE1 network from the vendored benchmark data."""
-    z = zipfile.ZipFile(ZIP)
-    nodes = _read(z, "network/nodes.csv")
-    pipes = _read(z, "network/pipes.csv")
-    substations = _read(z, "network/substations.csv")
-    hstations = _read(z, "network/heating_stations.csv")
-    mass_flow = _read(z, "data/mass_flow.csv", index_col=0)
-    supply_t = _read(z, "data/supply_temperature.csv", index_col=0)
-    power = _read(z, "data/power.csv", index_col=0)
+    with zipfile.ZipFile(ZIP) as z:
+        nodes = _read(z, "network/nodes.csv")
+        pipes = _read(z, "network/pipes.csv")
+        substations = _read(z, "network/substations.csv")
+        hstations = _read(z, "network/heating_stations.csv")
+        mass_flow = _read(z, "data/mass_flow.csv", index_col=0)
+        supply_t = _read(z, "data/supply_temperature.csv", index_col=0)
+        power = _read(z, "data/power.csv", index_col=0)
 
     net = Network()
     add_nodes_from_dataframe(
@@ -113,9 +113,9 @@ def build_network():
 class OpenDHNTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        z = zipfile.ZipFile(ZIP)
-        cls.supply_t = _read(z, "data/supply_temperature.csv", index_col=0)
-        cls.return_t = _read(z, "data/return_temperature.csv", index_col=0)
+        with zipfile.ZipFile(ZIP) as z:
+            cls.supply_t = _read(z, "data/supply_temperature.csv", index_col=0)
+            cls.return_t = _read(z, "data/return_temperature.csv", index_col=0)
         cls.net = build_network()
         results = SimpleStep(
             hydraulic_sim_kwargs={"error_threshold": 50},
