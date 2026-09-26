@@ -108,8 +108,13 @@ does not call
     class MyComp(Component):
         _controlled_keys = frozenset({"test_value"})
 
-If ``_controlled_keys`` is not declared, the control logic is called for every
-attribute.
+If a class overrides
+:meth:`~pydhn.components.abstract_component.Component._run_control_logic`
+without declaring ``_controlled_keys``, the control logic is called for every
+attribute. Subclasses that do not override it keep the keys of their parent.
+A subclass that declares its keys and calls the control logic of its parent
+must include the keys of the parent as well, for example
+``_controlled_keys = Consumer._controlled_keys | {"test_value"}``.
 
 Components with an internal state that evolves at each time step, like
 :class:`~pydhn.components.lagrangian_pipe.LagrangianPipe`, must set the class
