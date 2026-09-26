@@ -518,6 +518,10 @@ class LagrangianPipe(Pipe):
             t_out = staying_temperatures[-1]
             t_in = staying_temperatures[0]
 
+        # Only the water entering in excess of the pipe volume leaves at the inlet
+        # temperature: it is the part of the outlet that depends on it
+        t_out_der = safe_divide(max(new_vol - internal_volume, 0.0), new_vol)
+
         # Compute average temperature
         t_avg = (staying_volumes * staying_temperatures).sum() / staying_volumes.sum()
 
@@ -533,4 +537,4 @@ class LagrangianPipe(Pipe):
         self._temperatures = staying_temperatures
         self._wall_temperatures = new_wall_temps
 
-        return t_in, t_out, t_avg, 0.0, delta_q
+        return t_in, t_out, t_avg, t_out_der, delta_q

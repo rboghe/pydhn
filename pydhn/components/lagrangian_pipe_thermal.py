@@ -230,6 +230,10 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
     )
     t_in = np.where(displace, t_in, temps3[:, 0])
 
+    # Only the water entering in excess of the pipe volume leaves at the inlet
+    # temperature: it is the part of the outlet that depends on it
+    t_out_der = safe_divide(np.maximum(new_vol - internal_volume, 0.0), new_vol)
+
     # Compute average temperature
     sv = np.where(staying, vols3, 0.0)
     t_avg = (sv * temps3).sum(axis=1) / sv.sum(axis=1)
@@ -250,4 +254,4 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
         c._temperatures = staying_temperatures[::step].copy()
         c._wall_temperatures = wall_temperatures[::step].copy()
 
-    return t_in, t_out, t_avg, np.zeros(P), delta_q
+    return t_in, t_out, t_avg, t_out_der, delta_q

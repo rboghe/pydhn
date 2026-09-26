@@ -19,12 +19,15 @@ wall temperatures are non-uniform.
 """
 
 import unittest
+from itertools import product
+from unittest.mock import patch
 
 import numpy as np
 
 from pydhn.classes import Network
 from pydhn.components import LagrangianPipe
 from pydhn.components.vector_functions import COMPONENT_FUNCTIONS_DICT
+from pydhn.fluids import ConstantWater
 from pydhn.fluids import Water
 from pydhn.soils import Soil
 from pydhn.solving.temperature import compute_edge_temperatures
@@ -120,6 +123,41 @@ class LagrangianPipeMirrorSymmetry(unittest.TestCase):
                 (r._volumes, r._temperatures, r._wall_temperatures),
                 ts,
             )
+
+
+class LagrangianPipeOutletDerivative(unittest.TestCase):
+    def test_outlet_derivative(self):
+        """
+        dT_out/dT_in matches finite differences with both models. When more
+        water than the pipe volume enters, the excess leaves at the inlet
+        temperature during the same step.
+        """
+        fluid, soil = ConstantWater(), Soil(temp=8)
+        volume = LagrangianPipe(**PIPE_KWARGS)._internal_volume
+        delta_p = COMPONENT_FUNCTIONS_DICT["lagrangian_pipe"]["delta_p"]
+        scalar = {"lagrangian_pipe": {"delta_p": delta_p}}
+        for turnovers, vectorized in product((0.5, 1.5, 2.0, 3.0), (True, False)):
+            with self.subTest(turnovers=turnovers, vectorized=vectorized):
+                net = Network()
+                net.add_node("A", z=0.0)
+                net.add_node("B", z=0.0)
+                net.add_lagrangian_pipe("P", "A", "B", **PIPE_KWARGS)
+                mdot = turnovers * volume * fluid.rho / STEPSIZE
+                net.set_edge_attributes([mdot], "mass_flow")
+                delta_p(net, fluid, mask=np.array([0]))
+                t_out, t_out_der = {}, {}
+                # Repeating the same ts_id restarts from the same state
+                for t_in in (70.0, 70.001, 69.999):
+                    net.set_node_attributes(np.array([t_in, 50.0]), "temperature")
+                    with patch.dict(
+                        COMPONENT_FUNCTIONS_DICT, {} if vectorized else scalar
+                    ):
+                        outs = compute_edge_temperatures(net, fluid, soil, ts_id=0)
+                    t_out[t_in], t_out_der[t_in] = outs[1][0], outs[3][0]
+                derivative = (t_out[70.001] - t_out[69.999]) / 0.002
+                expected = max(turnovers - 1, 0) / turnovers
+                self.assertAlmostEqual(derivative, expected, places=6)
+                self.assertAlmostEqual(t_out_der[70.0], expected, places=6)
 
 
 if __name__ == "__main__":
