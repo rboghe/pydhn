@@ -25,7 +25,7 @@ Changed
 ~~~~~~~
 
 * **Dependencies:** Added support for NumPy 2 and NetworkX 3, and for Python 3.10 to 3.13. Python 3.9 is no longer supported.
-* **Time steps:** If ``solve_thermal`` runs without a ``ts_id`` on a network with dynamic components, it now uses the ID following the last one used and raises a warning. All the iterations of a time step share the same ID, so that dynamic components advance only once. This replaces the warning raised by ``SimpleStep`` when no ``ts_id`` is given. As the ID is passed to the soil, a ``KusudaSoil`` follows it instead of its own ``_ts``.
+* **Time steps:** If ``solve_thermal`` runs without a ``ts_id`` on a network with dynamic components, it now uses the integer following the ID of the last completed simulation and raises a warning. This ID is saved with the graph, and a step that failed can be retried with the same ID. All the iterations of a time step share the same ID, so that dynamic components advance only once. This replaces the warning raised by ``SimpleStep`` when no ``ts_id`` is given. As the ID is passed to the soil, a ``KusudaSoil`` follows it instead of its own ``_ts``.
 * **Zero mass flows:** During thermal simulations, dynamic components with zero mass flow temporarily receive the small mass flows used by the solver, so that their outlet temperature is computed at the right end.
 * **Performance:** The thermal solver uses sparse matrices for networks with 100 nodes or more, and networks are built faster. On the OpenDHN benchmark (1352 nodes), thermal simulations are about three times faster.
 * ``compute_edge_temperatures`` only stores the values of the edges in ``mask`` when ``set_values`` is True. If ``mask`` does not include all the components of a type, they are computed one by one instead of with their vectorized function.
@@ -42,6 +42,7 @@ Fixed
 * ``set_edge_attributes`` with a ``mask`` could assign the values to the wrong edges, depending on the order of the nodes. This affected, for example, the Reynolds number and friction factor of pipes in networks with different types of pipes.
 * Dynamic components no longer advance at each iteration of thermal simulations run without a ``ts_id``.
 * Fixed thermal simulations with zero mass flow edges forming closed loops, or separate groups.
+* Idle branches ending in nodes without flow, like dead ends, no longer make the thermal solver fail. The water is directed towards their end, which takes the outlet temperature of the branch.
 * Fixed the wall temperatures of ``LagrangianPipe`` with negative mass flows, which were matched to the wrong volumes.
 * ``LagrangianPipe`` no longer computes complex temperatures with NumPy 2.
 * ``LagrangianPipe`` now returns the derivative of the outlet temperature when more water than its volume enters it during a time step, which helps the thermal solver converge.
@@ -58,6 +59,7 @@ Fixed
 * The error printed by ``solve_thermal`` now has the right unit (kg·K/s).
 * The examples in the documentation now give the same output with NumPy 1 and 2, and the documentation shows the right version.
 * Fixed a bug in ``pipe_test`` related to local data reading.
+* CitySim climate files are no longer read with an option that pandas 3 removes.
 
 Removed
 ~~~~~~~
