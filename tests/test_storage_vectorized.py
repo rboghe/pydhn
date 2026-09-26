@@ -239,6 +239,10 @@ class StorageVectorEquivalence(unittest.TestCase):
             results_s, layers_s = simulate(deepcopy(net))
         np.testing.assert_array_equal(layers_v, layers_s)
         for rv, rs in zip(results_v, results_s):
+            for results in (rv, rs):
+                self.assertTrue(results["history"]["hydraulics converged"])
+                self.assertTrue(results["history"]["thermal converged"])
+                self.assertTrue(np.all(np.isfinite(results["edges"]["temperature"])))
             for key in ("outlet_temperature", "temperature", "delta_q"):
                 np.testing.assert_array_equal(rv["edges"][key], rs["edges"][key])
 
