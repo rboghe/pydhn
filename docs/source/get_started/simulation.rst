@@ -202,7 +202,7 @@ The model is implemented in the function :func:`~pydhn.solving.thermal_simulatio
       - :class:`int`
       - ``100``
     * - :attr:`error_threshold`
-      - Error threshold for the solver in Wh.
+      - Error threshold for the solver, as the maximum imbalance of mass flow times temperature in nodes (kg·K/s).
       - :class:`float`
       - ``1e-6``
     * - :attr:`mass_flow_min`

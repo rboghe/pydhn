@@ -111,6 +111,12 @@ does not call
 If ``_controlled_keys`` is not declared, the control logic is called for every
 attribute.
 
+Components with an internal state that evolves at each time step, like
+:class:`~pydhn.components.lagrangian_pipe.LagrangianPipe`, must set the class
+attribute ``_is_dynamic`` to ``True``. The thermal solver then makes sure that
+all the iterations of a time step share the same ``ts_id``, and gives these
+components a flow direction when their mass flow is zero.
+
 
 Finally, for each component two private methods defining the functioning during simulations need to be implemented: :meth:`~pydhn.components.abstract_component.Component._compute_delta_p` and :meth:`~pydhn.components.abstract_component.Component._compute_temperatures`.
 
@@ -797,7 +803,9 @@ works like the ``'mass_flow'`` mode of the
 :ref:`here <BaseProdHyd>`. A positive mass flow enters the top of the tank from
 the start node and leaves its bottom to the end node: if the top is connected to
 the supply line, this charges the tank. A negative mass flow goes in the
-opposite direction and discharges the tank.
+opposite direction and discharges the tank. As two components cannot connect
+the same pair of nodes, a storage next to a producer must be connected to it
+through at least one pipe.
 
 Thermal
 """"""""""""
@@ -836,10 +844,11 @@ The outlet temperature is the average temperature of the water leaving the tank
 during the time step, so that the heat exchanged with the network is consistent
 with the change of stored energy and the losses. The average temperature is
 instead the mean temperature of the layers at the end of the time step. If the
-mass flow is zero, the inlet and outlet temperatures are those of the top and
-bottom layers. During network simulations, however, the thermal solver gives
-idle dynamic components a very small mass flow, so that their outlet
-temperature is computed at the end chosen by the solver.
+mass flow is zero, the component returns the temperatures of the top and
+bottom layers as inlet and outlet temperatures. During network simulations,
+however, the inlet temperature is that of the upstream node, and the thermal
+solver gives idle dynamic components a very small mass flow, so that their
+outlet temperature is computed at the end chosen by the solver.
 
 The simulation loop uses the vectorized function
 :func:`~pydhn.components.stratified_storage_thermal.compute_storage_temp_net`,

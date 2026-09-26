@@ -25,7 +25,8 @@ def compute_edge_temperatures(
     Computes the inlet, outlet and average temperature in each component, as
     well as the derivative dT_out/dT_in and the heat exchanged. Only the
     edges in mask are computed, and their values are stored in the network if
-    set_values is True. Dynamic components update their state in any case.
+    set_values is True. Dynamic components in mask update their state whether
+    or not set_values is True.
     """
     # If a mask is not specified, all edges are considered
     if mask is None:

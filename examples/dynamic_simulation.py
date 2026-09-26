@@ -291,11 +291,11 @@ print(results_scheduler_dfs["edges"]["delta_q"].head())
 # but requires you to manage schedule indexing and component attribute updates
 # yourself.
 
-# Important: when using `SimpleStep.execute()`, you MUST explicitly pass the `ts_id`
-# parameter. This tells `pydhn`'s internal components (like `LagrangianPipe`)
-# which time step you're currently on, which is crucial for their internal state
-# management. If `ts_id` is omitted, `pydhn` will issue a warning, but the
-# simulation will still run, potentially leading to incorrect results.
+# Important: when using `SimpleStep.execute()`, pass the `ts_id` parameter. It
+# tells dynamic components (like `LagrangianPipe`) which time step you are on,
+# so that repeating a time step does not advance them again. If `ts_id` is
+# omitted, the thermal simulation treats each call as a new time step and raises
+# a warning.
 
 
 print("\n--- Approach 2: Manually Looping with SimpleStep (Fine-grained Control) ---")
