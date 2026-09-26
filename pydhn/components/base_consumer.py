@@ -69,7 +69,7 @@ class Consumer(Component):
         setpoint_type_hyd: str = SETPOINT_TYPE_HYD_CONS,
         setpoint_value_hyd: float = SETPOINT_VALUE_HYD_CONS,
         stepsize: float = 3600.0,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Init Consumer
@@ -182,14 +182,14 @@ class Consumer(Component):
         # Compute t_out, t_avg, t_out_der
         t_out, t_avg, t_out_der, delta_q = compute_hx_temp(
             t_in=t_in,
-            mass_flow=self._attrs["mass_flow"],
-            setpoint_type=self._attrs["setpoint_type_hx"],
-            setpoint_type_rev=self._attrs["setpoint_type_hx_rev"],
-            setpoint_value=self._attrs["setpoint_value_hx"],
-            setpoint_value_rev=self._attrs["setpoint_value_hx_rev"],
-            power_max=self._attrs["power_max_hx"],
-            t_out_min=self._attrs["t_out_min_hx"],
-            stepsize=self._attrs["stepsize"],
+            mass_flow=self["mass_flow"],
+            setpoint_type=self["setpoint_type_hx"],
+            setpoint_type_rev=self["setpoint_type_hx_rev"],
+            setpoint_value=self["setpoint_value_hx"],
+            setpoint_value_rev=self["setpoint_value_hx_rev"],
+            power_max=self["power_max_hx"],
+            t_out_min=self["t_out_min_hx"],
+            stepsize=self["stepsize"],
             cp_fluid=cp_fluid,
             ts_id=ts_id,
         )

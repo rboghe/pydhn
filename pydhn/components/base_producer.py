@@ -53,7 +53,7 @@ class Producer(Component):
         setpoint_type_hyd: str = SETPOINT_TYPE_HYD_PROD,
         setpoint_value_hyd: float = SETPOINT_VALUE_HYD_PROD,
         stepsize: float = 3600.0,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Init Producer
@@ -145,7 +145,7 @@ class Producer(Component):
             setpoint_value_rev=self["setpoint_value_hx_rev"],
             power_max=self["power_max_hx"],
             t_out_min=self["t_out_min_hx"],
-            stepsize=self._attrs["stepsize"],
+            stepsize=self["stepsize"],
             cp_fluid=cp_fluid,
             ts_id=ts_id,
         )

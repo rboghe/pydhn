@@ -327,8 +327,8 @@ def compute_pipe_temp_net(net, fluid, soil, ts_id=None):
     rho_fluid = fluid.get_rho(t_in)
 
     # Get soil properties
-    k_soil = soil.get_k(depth=depth)
-    t_soil = soil.get_temp(depth=depth)
+    k_soil = soil.get_k(depth=depth, ts=ts_id)
+    t_soil = soil.get_temp(depth=depth, ts=ts_id)
 
     # Compute t_out
     t_out, t_avg, t_out_der, delta_q = compute_pipe_temp(
