@@ -38,6 +38,8 @@ class Consumer(Component):
     a mass flow setpoint is specified.
     """
 
+    _controlled_keys = frozenset({"setpoint_value_hyd"})
+
     @docstring_parameters(
         CONTROL_TYPE_CONS=CONTROL_TYPE_CONS,
         D_HX=D_HX,
@@ -151,8 +153,6 @@ class Consumer(Component):
 
         self._attrs.update(input_dict)
         self._attrs.update(kwargs)
-
-    _controlled_keys = frozenset({"setpoint_value_hyd"})
 
     def _run_control_logic(self, key, cp_fluid=CP_FLUID):
         if key == "setpoint_value_hyd":
