@@ -231,6 +231,51 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
         self.check_fill(mass_flow, filled)
         self.check_open_path(net, mass_flow, filled, {"B", "D"})
 
+    def test_dead_end_branches(self):
+        """
+        The zero flow branches A - X - Y and B - Z end in nodes without other
+        edges, so water must flow towards Y and Z:
+
+            Y ────> X     Z
+                    ^     │
+                    │     v
+                    A ──> B ──> D
+                    ^           │
+                    └───────────┘
+        """
+        net, mass_flow = network_with_flows(
+            [
+                ("AB", "A", "B", 1.0),
+                ("BD", "B", "D", 1.0),
+                ("DA", "D", "A", 1.0),
+                ("AX", "A", "X", 0.0),
+                ("YX", "Y", "X", 0.0),
+                ("ZB", "Z", "B", 0.0),
+            ]
+        )
+        filled = fill(net, mass_flow)
+        self.check_fill(mass_flow, filled)
+        signs = np.sign(flows_by_name(net, filled, ["AX", "YX", "ZB"]))
+        np.testing.assert_array_equal(signs, [1, -1, -1])
+
+    def test_dead_end_in_network(self):
+        """
+        An idle pipe to a dead end does not stop the thermal solver, however it
+        is drawn. The dead end takes the outlet temperature of the pipe, which
+        is that of the soil without flow.
+        """
+        for start, end in (("S1", "DEAD"), ("DEAD", "S1")):
+            with self.subTest(start=start, end=end):
+                net = star_network()
+                net.add_node("DEAD", z=0.0)
+                net.add_pipe("DP", start, end, diameter=0.02, line="supply")
+                solve_hydraulics(net, ConstantWater(), verbose=0)
+                results = solve_thermal(
+                    net, ConstantWater(), Soil(temp=8), ts_id=0, verbose=0
+                )
+                self.assertTrue(results["history"]["thermal converged"])
+                self.assertAlmostEqual(net["DEAD"]["temperature"], 8.0)
+
     def test_idle_consumer_branch(self):
         """The thermal solver must converge with a consumer switched off."""
         net = star_network()

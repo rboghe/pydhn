@@ -37,10 +37,12 @@ def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     edges of the network graph are assigned the direction in which the mass
     flow is positive, no nodes have only incoming or outgoing edges.
 
-    The signs follow an Eulerian circuit of each group of connected zero flow
-    edges: every time the circuit enters a node, it also leaves it. In each
-    group, nodes with an odd number of zero flow edges are first connected to
-    a temporary node, so that a circuit exists. They become the ends of open
+    Zero flow branches ending in nodes without any flowing edge, like dead
+    ends, are first oriented towards these nodes, so that they receive water.
+    The other signs follow an Eulerian circuit of each group of connected zero
+    flow edges: every time the circuit enters a node, it also leaves it. In
+    each group, nodes with an odd number of zero flow edges are first connected
+    to a temporary node, so that a circuit exists. They become the ends of open
     paths.
 
     Parameters
@@ -65,6 +67,30 @@ def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     # Position of each edge in the mass flow array
     index = {edge: i for i, edge in enumerate(net._graph.edges())}
     zero_edges = nx.Graph([edge for edge, i in index.items() if mass_flow[i] == 0])
+    flowing = {n for edge, i in index.items() if mass_flow[i] != 0 for n in edge}
+
+    def orient(u, v):
+        # Assigns a small mass flow from u to v
+        if (u, v) in index:
+            mass_flow[index[u, v]] = mass_flow_min
+        else:
+            mass_flow[index[v, u]] = -mass_flow_min
+
+    # Orient branches towards their ends without flowing edges, then remove
+    # them, starting from these ends and moving inwards
+    ends = [n for n, degree in zero_edges.degree() if degree == 1 and n not in flowing]
+    while ends:
+        end = ends.pop()
+        # Both ends of a branch separated from the flowing edges were found
+        if zero_edges.degree(end) == 0:
+            continue
+        (node,) = zero_edges[end]
+        orient(node, end)
+        zero_edges.remove_node(end)
+        if zero_edges.degree(node) == 1 and node not in flowing:
+            ends.append(node)
+    zero_edges.remove_nodes_from(list(nx.isolates(zero_edges)))
+
     for nodes in nx.connected_components(zero_edges):
         group = zero_edges.subgraph(nodes).copy()
         odd = [n for n, degree in group.degree() if degree % 2]
@@ -74,10 +100,8 @@ def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
         source = temporary_node if odd else next(iter(group))
         # Edges to the temporary node are not in the network and are skipped
         for u, v in nx.eulerian_circuit(group, source=source):
-            if (u, v) in index:
-                mass_flow[index[u, v]] = mass_flow_min
-            elif (v, u) in index:
-                mass_flow[index[v, u]] = -mass_flow_min
+            if temporary_node not in (u, v):
+                orient(u, v)
     assert not np.isin(0, mass_flow)
     return mass_flow
 
