@@ -114,23 +114,23 @@ Masks can be used to find the indices of components meeting a certain criterion.
 
 .. doctest::
 
-    >>> net.mask(attr='insulation_thickness', value=0.034, condition='equality')
-    array([0, 1, 3, 6, 7, 8], dtype=int64)
-    >>> net.mask(attr='component_type', value='base_consumer', condition='equality')
-    array([2, 4, 5], dtype=int64)
-    >>> net.mask(attr='component_type', value=['base_producer', 'base_consumer'], condition='membership')
-    array([2, 4, 5, 9], dtype=int64)
+    >>> print(net.mask(attr='insulation_thickness', value=0.034, condition='equality'))
+    [0 1 3 6 7 8]
+    >>> print(net.mask(attr='component_type', value='base_consumer', condition='equality'))
+    [2 4 5]
+    >>> print(net.mask(attr='component_type', value=['base_producer', 'base_consumer'], condition='membership'))
+    [2 4 5 9]
 
 However, some specific masks also have their own method:
 
 .. doctest::
 
-    >>> net.producers_mask
-    array([9], dtype=int64)
-    >>> net.consumers_mask
-    array([2, 4, 5], dtype=int64)
-    >>> net.pipes_mask
-    array([0, 1, 3, 6, 7, 8], dtype=int64)
+    >>> print(net.producers_mask)
+    [9]
+    >>> print(net.consumers_mask)
+    [2 4 5]
+    >>> print(net.pipes_mask)
+    [0 1 3 6 7 8]
 
 A mask can be used to access the attributes of specific components:
 

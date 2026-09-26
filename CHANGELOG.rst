@@ -49,6 +49,7 @@ Fixed
 * ``valves_mask`` and ``pumps_mask`` now return branch valves and pumps instead of consumers and producers, and ``imposed_valves_mask`` and ``imposed_pumps_mask`` only return the edges with an imposed value.
 * Fixed the computation of node pressures when a source node is given.
 * The error printed by ``solve_thermal`` now has the right unit (kg·K/s).
+* The examples in the documentation now give the same output with NumPy 1 and 2.
 * Fixed a bug in ``pipe_test`` related to local data reading.
 
 Removed

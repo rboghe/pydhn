@@ -706,7 +706,7 @@ The control type ``'energy'`` imposes again a mass flow setpoint, with the diffe
 	>>> comp = Consumer(control_type='energy', heat_demand=5000.,
 	...                 design_delta_t=-30.)
 	>>> # Check the hydraulic setpoint value
-	>>> comp['setpoint_value_hyd'] # it should be 5000/(30*4182) = 0.03985
+	>>> print(comp['setpoint_value_hyd']) # it should be 5000/(30*4182) = 0.03985
 	0.03985333970986769
 
 

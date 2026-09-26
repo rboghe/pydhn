@@ -262,9 +262,9 @@ class AbstractNetwork:
             >>> net.add_node("Node 0")
             >>> net.add_node("Node 1")
             >>> net.add_edge("Pipe 0-1", "Node 0", "Node 1")
-            >>> net.adjacency_matrix
-            array([[0, 1],
-                   [0, 0]], dtype=int32)
+            >>> print(net.adjacency_matrix)
+            [[0 1]
+             [0 0]]
 
         """
         return self._compute_matrix(
