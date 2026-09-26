@@ -176,10 +176,11 @@ def solve_thermal(
     mass_flow_min : float, optional
         Mass flow (kg/s) used to approximate 0. The default is 1e-16.
     ts_id : int, optional
-        Specifies the ID of the current time-step. Dynamic components restore
-        their initial state when the same ID is repeated. If None and the
-        network has dynamic components, the ID following the last one used is
-        taken and a warning is raised. The default is None.
+        Specifies the ID of the current time-step, as an integer. Dynamic
+        components restore their initial state when the same ID is repeated.
+        If None and the network has dynamic components, the ID following that
+        of the last completed simulation is taken and a warning is raised. The
+        default is None.
     **kwargs
         Arbitrary keyword arguments.
 
@@ -201,8 +202,8 @@ def solve_thermal(
             msg = "No ts_id given: the thermal simulation is treated as a new "
             msg += "time step. Pass the same ts_id to repeat a time step."
             warn(msg, stacklevel=2)
-            ts_id = getattr(net, "_last_ts_id", -1) + 1
-        net._last_ts_id = ts_id
+            # The last ID is stored in the graph, so that it is also saved
+            ts_id = net._graph.graph.get("last_ts_id", -1) + 1
 
     # Dynamic components with zero mass flow compute their outlet temperature
     # at the end given by the sign of the new values, so they temporarily
@@ -289,6 +290,10 @@ def solve_thermal(
                     damp -= damp * (k / max_iters)
                 else:
                     damp = damping_factor
+
+    # Only completed simulations count, so that a failed step can be retried
+    if ts_id is not None:
+        net._graph.graph["last_ts_id"] = ts_id
 
     if verbose > 0:
         if converged:

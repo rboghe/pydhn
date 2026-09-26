@@ -9,6 +9,8 @@
 
 """Tests for time step IDs and zero mass flows in solve_thermal()"""
 
+import os
+import tempfile
 import unittest
 import warnings
 from copy import deepcopy
@@ -25,6 +27,7 @@ from pydhn.components.vector_functions import COMPONENT_FUNCTIONS_DICT
 from pydhn.networks import star_network
 from pydhn.solving import solve_hydraulics
 from pydhn.solving import solve_thermal
+from pydhn.solving.temperature import compute_edge_temperatures
 
 FLUID, SOIL = ConstantWater(), Soil()
 
@@ -193,6 +196,39 @@ class ThermalSimulationTestCase(unittest.TestCase):
                 "pydhn.solving.thermal_simulation.SPARSE_MIN_NODES", sparse_min_nodes
             ), self.assertRaises(np.linalg.LinAlgError):
                 solve_thermal(deepcopy(net), FLUID, SOIL, verbose=0)
+
+    def test_retry_after_error(self):
+        """A step that failed is retried with the same automatic ts_id."""
+
+        def fail_after_computing(*args, **kwargs):
+            compute_edge_temperatures(*args, **kwargs)
+            raise RuntimeError
+
+        clean, retried = idle_loop(), idle_loop()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            solve_thermal(clean, FLUID, SOIL, verbose=0)
+            with patch(
+                "pydhn.solving.thermal_simulation.compute_edge_temperatures",
+                side_effect=fail_after_computing,
+            ), self.assertRaises(RuntimeError):
+                solve_thermal(retried, FLUID, SOIL, verbose=0)
+            solve_thermal(retried, FLUID, SOIL, verbose=0)
+        self.assertEqual(retried["A", "B"]._last_ts, 0)
+        np.testing.assert_array_equal(
+            retried["A", "B"]._temperatures, clean["A", "B"]._temperatures
+        )
+
+    def test_automatic_ts_id_after_loading(self):
+        """The last ts_id is saved with the graph, so loaded networks continue."""
+        net, loaded = idle_loop(), Network()
+        with warnings.catch_warnings(), tempfile.TemporaryDirectory() as folder:
+            warnings.simplefilter("ignore")
+            solve_thermal(net, FLUID, SOIL, verbose=0)
+            net.save_graph(os.path.join(folder, "loop"))
+            loaded.load_graph(os.path.join(folder, "loop"))
+            solve_thermal(loaded, FLUID, SOIL, verbose=0)
+        self.assertEqual(loaded["A", "B"]._last_ts, 1)
 
 
 if __name__ == "__main__":
