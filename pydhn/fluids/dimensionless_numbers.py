@@ -100,8 +100,9 @@ def transition_nusselt(
     k_fluid=K_FLUID,
 ):
     laminar = laminar_nusselt()
+    # The turbulent value at the upper end of the transition regime
     turbulent = gnielinski_nusselt(
-        reynolds=2300,
+        reynolds=3000,
         diameter=diameter,
         length=length,
         prandtl=prandtl,
