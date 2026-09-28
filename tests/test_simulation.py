@@ -244,7 +244,7 @@ class SimulationConsistencyTestCase(unittest.TestCase):
         mask = sort[pos]
 
         # Get indices of reversed edges
-        revs = np.where(np.isin(["SP1", "SP2"], names_2))[0]
+        revs = np.where(np.isin(names_2, ["SP1", "SP2"]))[0]
 
         # HYDRAULICS
         res_1 = solve_hydraulics(net_1, fluid, error_threshold=1e-5)
@@ -286,7 +286,7 @@ class SimulationConsistencyTestCase(unittest.TestCase):
         dp_points = net_1["R8"]["pressure"] - net_1["S1"]["pressure"]
 
         self.assertAlmostEqual(dp_points, dp_setpoint, delta=1)
-        np.testing.assert_allclose(p_2, p_1, rtol=0.005, atol=1)
+        np.testing.assert_allclose(p_2, p_1, rtol=0, atol=1e-3)
 
         # THERMAL
         res_1_thermal = solve_thermal(net_1, fluid, soil, error_threshold=1e-9)
@@ -335,7 +335,7 @@ class SimulationConsistencyTestCase(unittest.TestCase):
         t_out_setpoint = net_1[("R8", "S1")]["setpoint_value_hx"]
 
         self.assertAlmostEqual(t_out_prod, t_out_setpoint, places=5)
-        np.testing.assert_allclose(t_2, t_1, rtol=0.005, atol=1)
+        np.testing.assert_allclose(t_2, t_1, rtol=0, atol=1e-6)
 
         # Check delta_t
         delta_t_1 = res_1_thermal["edges"]["delta_t"][0]
