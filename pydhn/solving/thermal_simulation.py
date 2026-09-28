@@ -211,7 +211,8 @@ def solve_thermal(
     idle_dynamic = np.flatnonzero((mass_flow == 0) & dynamic)
 
     # Find direction of zero mass flow elements
-    if np.any(mass_flow == 0):
+    has_idle_edges = np.any(mass_flow == 0)
+    if has_idle_edges:
         mass_flow = _fill_zero_mass_flow(
             net=net,
             mass_flow=mass_flow,
@@ -261,7 +262,9 @@ def solve_thermal(
         if verbose > 1:
             print(f"Error at iteration {k}: {error}")
 
-        if error <= error_threshold:
+        # The errors of nodes reached only by idle edges are weighted by their
+        # very small mass flows: a Newton step is needed to update them
+        if error <= error_threshold and (k > 0 or not has_idle_edges):
             converged = True
             break
 

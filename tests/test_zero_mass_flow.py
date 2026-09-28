@@ -276,6 +276,21 @@ class FillZeroMassFlowTestCase(unittest.TestCase):
                 self.assertTrue(results["history"]["thermal converged"])
                 self.assertAlmostEqual(net["DEAD"]["temperature"], 8.0)
 
+    def test_dead_end_added_after_convergence(self):
+        """
+        Idle nodes are updated even if the rest of the network has already
+        converged, as their errors are weighted by very small mass flows.
+        """
+        net = star_network()
+        solve_hydraulics(net, ConstantWater(), verbose=0)
+        soil = Soil(temp=8)
+        solve_thermal(net, ConstantWater(), soil, error_threshold=1e-9, verbose=0)
+        net.add_node("DEAD", z=0.0, temperature=50.0)
+        net.add_pipe("DP", "S1", "DEAD", diameter=0.02, line="supply")
+        solve_hydraulics(net, ConstantWater(), verbose=0)
+        solve_thermal(net, ConstantWater(), soil, verbose=0)
+        self.assertAlmostEqual(net["DEAD"]["temperature"], 8.0)
+
     def test_idle_consumer_branch(self):
         """The thermal solver must converge with a consumer switched off."""
         net = star_network()
