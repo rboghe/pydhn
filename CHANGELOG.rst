@@ -43,12 +43,13 @@ Fixed
 * Dynamic components no longer advance at each iteration of thermal simulations run without a ``ts_id``.
 * Fixed thermal simulations with zero mass flow edges forming closed loops, or separate groups.
 * Idle branches ending in nodes without flow, like dead ends, no longer make the thermal solver fail. The water is directed towards their end, which takes the outlet temperature of the branch.
+* Nodes reached only by idle edges are now updated even when the rest of the network has already converged, as their errors are weighted by very small mass flows.
 * Fixed the wall temperatures of ``LagrangianPipe`` with negative mass flows, which were matched to the wrong volumes.
 * ``LagrangianPipe`` no longer computes complex temperatures with NumPy 2.
 * ``LagrangianPipe`` now returns the derivative of the outlet temperature when more water than its volume enters it during a time step, which helps the thermal solver converge.
 * Calling ``LagrangianPipe._compute_temperatures`` without a ``ts_id`` now advances the pipe at each call.
 * Steady-state pipes now use the soil temperature of the current time step in network simulations too. Before, the temperature of a ``KusudaSoil`` did not change over time.
-* ``Consumer`` now reads its heat exchanger setpoints through its control logic when computed on its own, as in network simulations.
+* ``Pipe`` and ``Consumer`` now read their attributes through their control logic when computed on their own, as in network simulations.
 * Control logic inherited from another base class, such as a mixin, is no longer skipped.
 * ``save_graph`` and ``load_graph`` now work with NetworkX 3, and loading a graph clears the cached data of the previous one.
 * Fixed the hydrostatic pressure difference in pipes, which raised an error in network simulations and was returned as an array for single pipes.
