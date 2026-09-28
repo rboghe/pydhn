@@ -227,7 +227,7 @@ The model is implemented in the function :func:`~pydhn.solving.thermal_simulatio
       - :class:`int`
       - ``1``
     * - :attr:`ts_id`
-      - Specifies the ID of the current time-step.
+      - Specifies the ID of the current time-step, as an integer. Dynamic components restore their state when the same ID is repeated. If ``None`` and the network has dynamic components, the ID following that of the last completed simulation is used and a warning is raised.
       - :class:`int`
       - ``None``
 

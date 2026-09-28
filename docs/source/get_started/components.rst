@@ -114,7 +114,9 @@ without declaring ``_controlled_keys``, the control logic is called for every
 attribute. Subclasses that do not override it keep the keys of their parent.
 A subclass that declares its keys and calls the control logic of its parent
 must include the keys of the parent as well, for example
-``_controlled_keys = Consumer._controlled_keys | {"test_value"}``.
+``_controlled_keys = Consumer._controlled_keys | {"test_value"}``. The control
+logic must be defined in the body of the class: methods assigned later to the
+class or to an instance are not detected.
 
 Components with an internal state that evolves at each time step, like
 :class:`~pydhn.components.lagrangian_pipe.LagrangianPipe`, must set the class
