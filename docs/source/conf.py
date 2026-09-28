@@ -16,17 +16,18 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import os
+import re
 import sys
-import tomllib
 
 project = "PyDHN"
 copyright = (
     "2024, Idiap Research Institute, https://www.idiap.ch, EPFL, https://www.epfl.ch"
 )
 author = "Roberto Boghetti"
-# The version is set in pyproject.toml
-with open("../../pyproject.toml", "rb") as pyproject:
-    release = tomllib.load(pyproject)["project"]["version"]
+# The version is set in pyproject.toml. A regular expression reads it with
+# any version of Python, while tomllib requires Python 3.11.
+with open("../../pyproject.toml", encoding="utf-8") as pyproject:
+    release = re.search(r'^version = "(.+)"', pyproject.read(), re.M).group(1)
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
