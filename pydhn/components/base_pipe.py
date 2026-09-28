@@ -70,7 +70,7 @@ class Pipe(Component):
         discretization: float = DISCRETIZATION,
         dz: float = 0.0,
         line: str = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Inits Pipe.
@@ -235,33 +235,33 @@ class Pipe(Component):
         rho_fluid = fluid.get_rho(t_in)
 
         # Get soil properties
-        depth = self._attrs["depth"]
+        depth = self["depth"]
         k_soil = soil.get_k(depth=depth, ts=ts_id)
         t_soil = soil.get_temp(depth=depth, ts=ts_id)
 
         # Compute t_out, t_avg, t_out_der
         t_out, t_avg, t_out_der, delta_q = compute_pipe_temp(
             t_in=t_in,
-            mdot=self._attrs["mass_flow"],
-            delta_p_friction=self._attrs["delta_p_friction"],
-            length=self._attrs["length"],
-            diameter=self._attrs["diameter"],
-            reynolds=self._attrs["reynolds"],
-            thickness_ins=self._attrs["insulation_thickness"],
-            k_insulation=self._attrs["k_insulation"],
-            friction_factor=self._attrs["friction_factor"],
-            k_internal_pipe=self._attrs["k_internal_pipe"],
-            thickness_internal_pipe=self._attrs["internal_pipe_thickness"],
-            k_casing=self._attrs["k_casing"],
-            thickness_casing=self._attrs["casing_thickness"],
-            depth=self._attrs["depth"],
+            mdot=self["mass_flow"],
+            delta_p_friction=self["delta_p_friction"],
+            length=self["length"],
+            diameter=self["diameter"],
+            reynolds=self["reynolds"],
+            thickness_ins=self["insulation_thickness"],
+            k_insulation=self["k_insulation"],
+            friction_factor=self["friction_factor"],
+            k_internal_pipe=self["k_internal_pipe"],
+            thickness_internal_pipe=self["internal_pipe_thickness"],
+            k_casing=self["k_casing"],
+            thickness_casing=self["casing_thickness"],
+            depth=self["depth"],
             k_soil=k_soil,
             t_soil=t_soil,
             cp_fluid=cp_fluid,
             mu_fluid=mu_fluid,
             k_fluid=k_fluid,
             rho_fluid=rho_fluid,
-            discretization=self._attrs["discretization"],
+            discretization=self["discretization"],
         )
 
         return t_in, t_out, t_avg, t_out_der, delta_q

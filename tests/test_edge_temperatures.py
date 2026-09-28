@@ -16,6 +16,7 @@ import numpy as np
 
 from pydhn import ConstantWater
 from pydhn.components import Consumer
+from pydhn.components import Pipe
 from pydhn.default_values import CP_FLUID
 from pydhn.networks import star_network
 from pydhn.soils import KusudaSoil
@@ -39,18 +40,29 @@ class ControlledConsumer(Consumer):
         return super()._run_control_logic(key, cp_fluid)
 
 
+class ControlledPipe(Pipe):
+    """Pipe with a length of 1000 m set through control logic"""
+
+    _controlled_keys = frozenset({"length"})
+
+    def _run_control_logic(self, key):
+        return 1000.0 if key == "length" else None
+
+
 class PartialSelectionTestCase(unittest.TestCase):
     def test_partial_selection_matches_full_network(self):
         """
         Computing only some edges gives the same results as computing all of
-        them, with a soil that depends on the time step and a consumer
-        controlled through its control logic.
+        them, with a soil that depends on the time step and a pipe and a
+        consumer controlled through their control logic.
         """
         net = star_network()
         with warnings.catch_warnings():
             # Replacing the component of an existing edge raises a warning
             warnings.simplefilter("ignore")
             net.add_component("SUB1", "S7", "R7", ControlledConsumer(name="SUB1"))
+            pipe = ControlledPipe(name="SP1", diameter=0.02, line="supply")
+            net.add_component("SP1", "S1", "S2", pipe)
         fluid = ConstantWater()
         solve_hydraulics(net, fluid, verbose=0)
         hours = np.arange(8760)
