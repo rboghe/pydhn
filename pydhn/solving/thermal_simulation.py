@@ -39,7 +39,8 @@ def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     In order to avoid this, these values need to be temporarily replaced with a
     very low mass flow. The sign of the new mass flow must be such that, if the
     edges of the network graph are assigned the direction in which the mass
-    flow is positive, no nodes have only incoming or outgoing edges.
+    flow is positive, every node receives water, and nodes that are not dead
+    ends have no artificial sources or sinks where possible.
 
     Zero flow branches ending in nodes without any flowing edge, like dead
     ends, are first oriented towards these nodes, so that they receive water.
@@ -64,8 +65,7 @@ def _fill_zero_mass_flow(net, mass_flow, mass_flow_min=1e-16):
     -------
     mass_flow : Array
         Array of mass flow values where all the 0s are converted to a value
-        equal to mass_flow_min times either 1 or -1, in a way that no
-        converging or diverging nodes are created.
+        equal to mass_flow_min times either 1 or -1, as described above.
 
     """
     # Position of each edge in the mass flow array
@@ -294,7 +294,8 @@ def solve_thermal(
                 else:
                     damp = damping_factor
 
-    # Only completed simulations count, so that a failed step can be retried
+    # Simulations that raised an error do not count, so that their step can be
+    # retried. Non-converged ones do: pass the same ts_id to repeat them.
     if ts_id is not None:
         net._graph.graph["last_ts_id"] = ts_id
 
