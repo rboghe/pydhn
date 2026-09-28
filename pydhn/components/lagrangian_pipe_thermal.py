@@ -180,10 +180,10 @@ def compute_lagrangian_temp_net(net, fluid, soil, ts_id=None):
 
     # Move the parcels in 2D arrays with one row per pipe. The first column is
     # left free for the new parcel entering the pipe, and there is room for
-    # splitting the parcel that partly leaves it. As in the scalar model, very
-    # small mass flows do not move the parcels.
+    # splitting the parcel that partly leaves it. As in the scalar model,
+    # volumes below a millionth of the pipe volume do not move the parcels.
     new_vol = safe_divide(mdot * stepsize, fluid.get_rho(t_in))
-    displace = new_vol > np.finfo(float).eps * internal_volume * counts
+    displace = new_vol > 1e-6 * internal_volume
     W = counts.max() + 2
     rows = np.arange(P)
     vols2 = np.zeros((P, W))

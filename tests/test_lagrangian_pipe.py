@@ -136,6 +136,29 @@ class LagrangianPipeMirrorSymmetry(unittest.TestCase):
 
 
 class LagrangianPipeOutletDerivative(unittest.TestCase):
+    def test_idle_pipe_keeps_its_parcels(self):
+        """
+        The very small mass flows given by the thermal solver to idle pipes do
+        not add parcels, also with long time steps.
+        """
+        fluid, soil = ConstantWater(), Soil(temp=8)
+        delta_p = COMPONENT_FUNCTIONS_DICT["lagrangian_pipe"]["delta_p"]
+        scalar = {"lagrangian_pipe": {"delta_p": delta_p}}
+        for vectorized in (True, False):
+            with self.subTest(vectorized=vectorized):
+                net = Network()
+                net.add_node("A", z=0.0)
+                net.add_node("B", z=0.0)
+                net.add_lagrangian_pipe(
+                    "P", "A", "B", length=5.0, diameter=0.02, stepsize=3600.0
+                )
+                net.set_edge_attributes([1e-16], "mass_flow")
+                delta_p(net, fluid, mask=np.array([0]))
+                with patch.dict(COMPONENT_FUNCTIONS_DICT, {} if vectorized else scalar):
+                    for ts_id in range(20):
+                        compute_edge_temperatures(net, fluid, soil, ts_id=ts_id)
+                self.assertEqual(len(net["A", "B"]._volumes), 1)
+
     def test_outlet_derivative(self):
         """
         dT_out/dT_in matches finite differences with both models. When more

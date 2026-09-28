@@ -464,12 +464,12 @@ class LagrangianPipe(Pipe):
         delta_qs = safe_divide(self._volumes * cp_fluid * delta_ts * rho_fluid, 3600.0)
         delta_q = np.sum(delta_qs)
 
-        # Displace volumes. With very small mass flows, like those given by the
-        # thermal solver to idle pipes, the new volume is below the round-off
-        # error of the pipe volume, so nothing is moved.
+        # Displace volumes. Volumes below a millionth of the pipe volume, like
+        # those given by the very small mass flows of the thermal solver to idle
+        # pipes, are not moved: they would only add a parcel at each step.
         rho_fluid_new = fluid.get_rho(t_in)
         new_vol = safe_divide(np.abs(mdot) * stepsize, rho_fluid_new)
-        displace = new_vol > np.finfo(float).eps * internal_volume * len(self._volumes)
+        displace = new_vol > 1e-6 * internal_volume
         if displace:
             new_volumes = np.insert(self._volumes, 0, new_vol)
             new_temps = np.insert(new_temps, 0, t_in)
